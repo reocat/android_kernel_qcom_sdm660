@@ -21,7 +21,7 @@
 #include <linux/uaccess.h>
 #include <linux/debugfs.h>
 #include <linux/cache.h>
-
+#include <linux/of.h>
 
 #include <linux/qcota.h>
 #include "qce.h"
