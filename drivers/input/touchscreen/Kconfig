@@ -1323,6 +1323,10 @@ config TOUCHSCREEN_ST
 	  module will be called st.
 
 source "drivers/input/touchscreen/st/Kconfig"
+source "drivers/input/touchscreen/focaltech_touch/Kconfig"
+source "drivers/input/touchscreen/nt36xxx/Kconfig"
+source "drivers/input/touchscreen/gt1x/Kconfig"
+source "drivers/input/touchscreen/focaltech_touch_8719/Kconfig"
 
 config TOUCHSCREEN_SYNAPTICS_DSX
 	bool "Synaptics DSX Touchscreen Driver"
@@ -1337,6 +1341,10 @@ config TOUCHSCREEN_SYNAPTICS_DSX
 	  module will be called synaptics_dsx.
 
 source "drivers/input/touchscreen/synaptics_dsx/Kconfig"
+# SW4-HL-TP-BringUpILI2121-00+_20170327
+source "drivers/input/touchscreen/ilitek/Kconfig"
+# SW4-HL-TP-BringUpGT915L-00+_20180119
+source "drivers/input/touchscreen/gt9xx/Kconfig"
 
 config TOUCHSCREEN_SYNAPTICS_TCM
 	bool "Synaptics TCM Touchscreen Driver"

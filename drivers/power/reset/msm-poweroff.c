@@ -27,6 +27,8 @@
 #include <soc/qcom/watchdog.h>
 #include <soc/qcom/minidump.h>
 
+#include "../../../drivers/fih/fih_rere.h"  /* FIH, to support fih reboot command */
+
 #define EMERGENCY_DLOAD_MAGIC1    0x322A4F99
 #define EMERGENCY_DLOAD_MAGIC2    0xC67E4350
 #define EMERGENCY_DLOAD_MAGIC3    0x77777777
@@ -188,6 +190,7 @@ static bool get_dload_mode(void)
 
 static void enable_emergency_dload_mode(void)
 {
+#ifdef support_qcom_edl
 	int ret;
 
 	if (emergency_dload_mode_addr) {

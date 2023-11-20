@@ -215,6 +215,10 @@ source "drivers/fsi/Kconfig"
 
 source "drivers/tee/Kconfig"
 
+source "drivers/fih/Kconfig"
+
+source "drivers/haptics/Kconfig
+
 source "drivers/mux/Kconfig"
 
 source "drivers/opp/Kconfig"

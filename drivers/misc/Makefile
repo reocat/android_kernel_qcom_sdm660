@@ -63,6 +63,8 @@ obj-$(CONFIG_OCXL)		+= ocxl/
 obj-$(CONFIG_MISC_RTSX)		+= cardreader/
 obj-$(CONFIG_UID_SYS_STATS)	+= uid_sys_stats.o
 obj-$(CONFIG_MEMORY_STATE_TIME)	+= memory_state_time.o
+#sharp param, zhangzhe@20171101
++obj-y                           += sharp_param.o
 obj-$(CONFIG_QPNP_MISC)		+= qpnp-misc.o
 
 obj-$(CONFIG_OKL4_USER_VIRQ)	+= okl4-virq.o

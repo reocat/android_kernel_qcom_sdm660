@@ -1,0 +1,15 @@
+diff a/drivers/regulator/qpnp-lcdb-regulator.c b/drivers/regulator/qpnp-lcdb-regulator.c	(rejected hunks)
+@@ -1859,6 +1863,13 @@ static int qpnp_lcdb_parse_dt(struct qpnp_lcdb *lcdb)
+ 	if (lcdb->sc_irq < 0)
+ 		pr_debug("sc irq is not defined\n");
+ 
++	if (of_property_read_bool(node, "qcom,lcdb-pwrup-pwrdn-ctl-override")) {
++		lcdb->pwrup_pwrdn_ctl_override = true;
++		of_property_read_u8(node, "qcom,lcdb-pwrup-pwrdn-ctl", &lcdb->pwrup_pwrdn_ctl);
++	} else {
++		lcdb->pwrup_pwrdn_ctl_override = false;
++	}
++
+ 	return rc;
+ }
+ 

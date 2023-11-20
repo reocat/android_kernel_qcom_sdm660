@@ -20,6 +20,11 @@
 #include "mdss_debug.h"
 #include "mdss_smmu.h"
 #include "mdss_dsi_phy.h"
+#include "../../../fih/fih_lcm.h"
+
+#if defined(CONFIG_PXLW_IRIS3)
+#include "mdss_dsi_iris3.h"
+#endif
 
 #define VSYNC_PERIOD 17
 #define DMA_TX_TIMEOUT 200
@@ -35,6 +40,13 @@
 #define MAX_BTA_WAIT_RETRY 5
 
 #define CEIL(x, y)		(((x) + ((y)-1)) / (y))
+
+//SW4-HL-Display-BBox-01*{_20160804
+//SW4-HL-Display-BBox-00+{_20150610
+/* Black Box */
+#define BBOX_LCM_MIPI_FAIL do {printk("BBox;%s: LCM MIPI fail\n", __func__); printk("BBox::UEC;0::0\n");} while (0);
+//SW4-HL-Display-BBox-00+}_20150610
+//SW4-HL-Display-BBox-01*}_20160804
 
 struct mdss_dsi_ctrl_pdata *ctrl_list[DSI_CTRL_MAX];
 
@@ -116,7 +128,11 @@ void mdss_dsi_ctrl_init(struct device *ctrl_dev,
 	mutex_init(&ctrl->cmd_mutex);
 	mutex_init(&ctrl->clk_lane_mutex);
 	mutex_init(&ctrl->cmdlist_mutex);
+#if defined(CONFIG_PXLW_IRIS3)
+	mdss_dsi_buf_alloc(ctrl_dev, &ctrl->tx_buf, DSI_DMA_TX_BUF_SIZE);
+#else
 	mdss_dsi_buf_alloc(ctrl_dev, &ctrl->tx_buf, SZ_4K);
+#endif
 	mdss_dsi_buf_alloc(ctrl_dev, &ctrl->rx_buf, SZ_4K);
 	mdss_dsi_buf_alloc(ctrl_dev, &ctrl->status_buf, SZ_4K);
 	ctrl->cmdlist_commit = mdss_dsi_cmdlist_commit;
@@ -1164,7 +1180,11 @@ void mdss_dsi_op_mode_config(int mode,
 void mdss_dsi_cmd_bta_sw_trigger(struct mdss_panel_data *pdata)
 {
 	u32 status;
+#if defined(CONFIG_PXLW_IRIS3)
+	int timeout_us = 20000;
+#else
 	int timeout_us = 10000;
+#endif
 	struct mdss_dsi_ctrl_pdata *ctrl_pdata = NULL;
 
 	if (pdata == NULL) {
@@ -1586,6 +1606,9 @@ static void mdss_dsi_schedule_dma_cmd(struct mdss_dsi_ctrl_pdata *ctrl)
 
 	pinfo = &ctrl->panel_data.panel_info;
 	v_blank = pinfo->lcdc.v_back_porch + pinfo->lcdc.v_pulse_width;
+#if defined(CONFIG_PXLW_IRIS3)
+	iris_add_vblank(&v_blank);
+#endif
 
 	/* DMA_SCHEDULE_CTRL */
 	val = MIPI_INP(ctrl->ctrl_io.base + 0x100);
@@ -1841,7 +1864,14 @@ static int mdss_dsi_cmd_dma_tpg_tx(struct mdss_dsi_ctrl_pdata *ctrl,
 	ret = wait_for_completion_timeout(&ctrl->dma_comp,
 				msecs_to_jiffies(DMA_TX_TIMEOUT));
 	if (ret == 0)
+	//SW4-HL-Display-BBox-01*{_20160804
+	//SW4-HL-Display-BBox-00*{_20150610
+	{
+		BBOX_LCM_MIPI_FAIL
 		ret = -ETIMEDOUT;
+	}
+	//SW4-HL-Display-BBox-00*}_20150610
+	//SW4-HL-Display-BBox-01*}_20160804
 	else
 		ret = tp->len;
 
@@ -1866,6 +1896,11 @@ static int mdss_dsi_cmd_dma_tpg_tx(struct mdss_dsi_ctrl_pdata *ctrl,
 	return ret;
 }
 
+#if defined(CONFIG_PXLW_IRIS3)
+static void __dsi_fifo_error_handler(struct mdss_dsi_ctrl_pdata *ctrl, bool recovery_needed);
+#endif
+
+
 static int mdss_dsi_cmds2buf_tx(struct mdss_dsi_ctrl_pdata *ctrl,
 			struct dsi_cmd_desc *cmds, int cnt, int use_dma_tpg)
 {
@@ -1881,6 +1916,7 @@ static int mdss_dsi_cmds2buf_tx(struct mdss_dsi_ctrl_pdata *ctrl,
 	while (cnt--) {
 		dchdr = &cm->dchdr;
 		mdss_dsi_buf_reserve(tp, len);
+		
 		len = mdss_dsi_cmd_dma_add(tp, cm);
 		if (!len) {
 			pr_err("%s: failed to add cmd = 0x%x\n",
@@ -2107,9 +2143,15 @@ do_send:
 		 * its already been configured
 		 * for the requested pkt_size
 		 */
+#if defined(CONFIG_PXLW_IRIS3)
+		if (iris_is_valid_cfg())
+			pkt_size_cmd.dchdr.ack = 1;
+		else if (pkt_size == ctrl->cur_max_pkt_size)
+			goto skip_max_pkt_size;
+#else
 		if (pkt_size == ctrl->cur_max_pkt_size)
 			goto skip_max_pkt_size;
-
+#endif
 		max_pktsize[0] = pkt_size;
 		mdss_dsi_buf_init(tp);
 		ret = mdss_dsi_cmd_dma_add(tp, &pkt_size_cmd);
@@ -2139,7 +2181,6 @@ do_send:
 		ctrl->cur_max_pkt_size = pkt_size;
 		pr_debug("%s: max_pkt_size=%d sent\n",
 					__func__, pkt_size);
-
 skip_max_pkt_size:
 		mdss_dsi_buf_init(tp);
 		ret = mdss_dsi_cmd_dma_add(tp, cmds);
@@ -2281,6 +2322,16 @@ static int mdss_dsi_cmd_dma_tx(struct mdss_dsi_ctrl_pdata *ctrl,
 	len = ALIGN(tp->len, 4);
 	ctrl->dma_size = ALIGN(tp->len, SZ_4K);
 
+	// Start
+	{
+		int i=0;
+		pr_debug("%s: ", __func__);
+		for (i=0; i<tp->len; i++)
+			pr_debug("%x ", *bp++);
+		pr_debug("\n");
+	}
+	// End
+
 	ctrl->mdss_util->iommu_lock();
 	if (ctrl->mdss_util->iommu_attached()) {
 		ret = mdss_smmu_dsi_map_buffer(tp->dmap, domain, ctrl->dma_size,
@@ -2360,6 +2411,8 @@ static int mdss_dsi_cmd_dma_tx(struct mdss_dsi_ctrl_pdata *ctrl,
 				__func__);
 		} else {
 			ret = -ETIMEDOUT;
+			pr_err("%s: DMA timeout, len %d\n", __func__, len);
+
 		}
 	}
 
@@ -3163,6 +3216,8 @@ bool mdss_dsi_ack_err_status(struct mdss_dsi_ctrl_pdata *ctrl)
 	u32 status;
 	unsigned char *base;
 	bool ret = false;
+	static char page_cnt[32] = {0};
+	static char page_status[32] ={0};
 
 	base = ctrl->ctrl_base;
 
@@ -3184,8 +3239,31 @@ bool mdss_dsi_ack_err_status(struct mdss_dsi_ctrl_pdata *ctrl)
 			 (ctrl->status_mode == ESD_REG_NT35596)) &&
 			 (status & 0x1008000))
 			return false;
-
+#if defined(CONFIG_PXLW_IRIS3)
+		if (iris_is_valid_cfg()) {
+			if (status & 0x01000000)  /* ERROR */
+				ctrl->bta_error = true;
+			if (status & ~0x10000000) { /* ACK */
+				pr_err("%s: status=%x\n", __func__, status);
+				ctrl->err_cont.dsi_ack_err_cnt++;
+				ctrl->err_cont.dsi_ack_err_status = status;
+				sprintf(page_cnt, "0x%x\n",ctrl->err_cont.dsi_ack_err_cnt);
+				sprintf(page_status, "0x%x\n",ctrl->err_cont.dsi_ack_err_status);
+				fih_awer_cnt_set(page_cnt);
+				fih_awer_status_set(page_status);
+			}
+		} else {
+#endif
 		pr_err("%s: status=%x\n", __func__, status);
+		ctrl->err_cont.dsi_ack_err_cnt++;
+		ctrl->err_cont.dsi_ack_err_status = status;
+		sprintf(page_cnt, "0x%x\n",ctrl->err_cont.dsi_ack_err_cnt);
+		sprintf(page_status, "0x%x\n",ctrl->err_cont.dsi_ack_err_status);
+		fih_awer_cnt_set(page_cnt);
+		fih_awer_status_set(page_status);
+#if defined(CONFIG_PXLW_IRIS3)
+		}
+#endif
 		ret = true;
 	}
 
@@ -3252,7 +3330,10 @@ static bool mdss_dsi_fifo_status(struct mdss_dsi_ctrl_pdata *ctrl)
 	if (status & 0xcccc4409) {
 		MIPI_OUTP(base + 0x000c, status);
 
-		pr_err("%s: status=%x\n", __func__, status);
+		//SW4-HL-Display-AvoidConsoleCrashBecauseOfPrntingTooManyErrorMsgs-00*{_20150427
+		if (printk_ratelimit())
+			pr_err("%s: status=%x\n", __func__, status);
+		//SW4-HL-Display-AvoidConsoleCrashBecauseOfPrntingTooManyErrorMsgs-00*}_20150427
 
 		/*
 		 * if DSI FIFO overflow is masked,
@@ -3289,8 +3370,15 @@ static bool mdss_dsi_status(struct mdss_dsi_ctrl_pdata *ctrl)
 
 	if (status & 0x80000000) { /* INTERLEAVE_OP_CONTENTION */
 		MIPI_OUTP(base + 0x0008, status);
-		pr_err("%s: status=%x\n", __func__, status);
+		//SW4-HL-Display-AvoidConsoleCrashBecauseOfPrntingTooManyErrorMsgs-00*{_20150427
+		if (printk_ratelimit())
+			pr_err("%s: status=%x\n", __func__, status);
+		//SW4-HL-Display-AvoidConsoleCrashBecauseOfPrntingTooManyErrorMsgs-00*}_20150427
 		ret = true;
+#if defined(CONFIG_PXLW_IRIS3)
+		ctrl->interleave_op_contention = true;
+#endif
+
 	}
 
 	return ret;
@@ -3336,8 +3424,11 @@ static void __dsi_error_counter(struct dsi_err_container *err_container)
 
 	if (prev_time &&
 		((curr_time - prev_time) < err_container->err_time_delta)) {
-		pr_err("%s: panic in WQ as dsi error intrs within:%dms\n",
-				__func__, err_container->err_time_delta);
+		//SW4-HL-Display-AvoidConsoleCrashBecauseOfPrntingTooManyErrorMsgs-00*}_20150427
+		if (printk_ratelimit())
+			pr_err("%s: panic in WQ as dsi error intrs within:%dms\n",
+					__func__, err_container->err_time_delta);
+		//SW4-HL-Display-AvoidConsoleCrashBecauseOfPrntingTooManyErrorMsgs-00*}_20150427
 		MDSS_XLOG_TOUT_HANDLER_WQ("mdp", "dsi0_ctrl", "dsi0_phy",
 			"dsi1_ctrl", "dsi1_phy", "dsi_dbg_bus", "panic");
 	}

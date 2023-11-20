@@ -64,6 +64,10 @@
 #include <asm/xen/hypervisor.h>
 #include <asm/mmu_context.h>
 
+#ifdef CONFIG_FIH_HWCONFIG
+#include <fih/swid.h>
+#endif
+
 static int num_standard_resources;
 static struct resource *standard_resources;
 
@@ -402,6 +406,10 @@ static int __init topology_init(void)
 		cpu->hotpluggable = 1;
 		register_cpu(cpu, i);
 	}
+
+	#ifdef CONFIG_FIH_HWCONFIG
+	fih_swid_setup();
+	#endif
 
 	return 0;
 }

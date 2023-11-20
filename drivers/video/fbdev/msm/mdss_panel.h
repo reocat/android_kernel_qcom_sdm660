@@ -785,6 +785,8 @@ struct mdss_panel_info {
 	u32 yres;
 	u32 physical_width;
 	u32 physical_height;
+	u32 physical_width_full;	//SW4-HL-Display-CTS_Xdpi_Ydpi-00+_20151112
+	u32 physical_height_full;	//SW4-HL-Display-CTS_Xdpi_Ydpi-00+_20151112
 	u32 bpp;
 	u32 type;
 	u32 wait_cycle;
@@ -942,6 +944,21 @@ struct mdss_panel_info {
 
 	/* esc clk recommended for the panel */
 	u32 esc_clk_rate_hz;
+
+	int panel_id;	//SW4-HL-Display-ImplementPanelID-00+_20151112
+
+	//SW4-HL-Display-GlanceMode-00+{_20170524
+	bool aod_enabled;
+
+	bool aod_power_keep;
+	bool aod_power_keep_1p8;
+	bool aod_power_keep_3p3;
+	bool aod_power_keep_lab;
+	bool aod_power_keep_ibb;
+
+	bool aod_ready_on;
+	//struct wake_lock aod_wake_lock;
+	//SW4-HL-Display-GlanceMode-00+}_20170524
 };
 
 struct mdss_panel_timing {
