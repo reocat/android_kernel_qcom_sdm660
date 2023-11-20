@@ -42,6 +42,7 @@
 #ifdef CONFIG_COMPAT
 #include <linux/compat.h>
 #endif
+#include <linux/miscdevice.h>
 
 MODULE_DESCRIPTION("Diag Char Driver");
 MODULE_LICENSE("GPL v2");
@@ -146,6 +147,7 @@ void *diag_ipc_log;
 #endif
 
 static void diag_md_session_close(int pid);
+
 
 /*
  * Returns the next delayed rsp id. If wrapping is enabled,
@@ -3459,7 +3461,6 @@ static int diag_user_process_raw_data(const char __user *buf, int len)
 		pr_err("diag: copy failed for user space data\n");
 		goto fail;
 	}
-
 	/* Check for proc_type */
 	if (len >= sizeof(int))
 		remote_proc = diag_get_remote(*(int *)user_space_data);

@@ -1,0 +1,149 @@
+diff a/drivers/video/fbdev/msm/mdss_dsi.c b/drivers/video/fbdev/msm/mdss_dsi.c	(rejected hunks)
+@@ -3729,6 +5340,128 @@ static int mdss_dsi_ctrl_probe(struct platform_device *pdev)
+ 
+ 	mdss_dsi_debug_bus_init(mdss_dsi_res);
+ 
++	//SW4-HL-Display-ImplementCECTCABC-00+{_20160126
++	//SW4-HL-Display-DynamicReadWriteRegister-00+{_20160729
++	gpdata = devm_kzalloc(&pdev->dev,
++				  sizeof(struct mdss_dsi_ctrl_pdata),
++				  GFP_KERNEL);
++	if (!gpdata) {
++		pr_err("%s: FAILED: cannot alloc dsi ctr - gpdata\n",
++			   __func__);
++		rc = -ENOMEM;
++		goto error_no_mem;
++	}
++	platform_set_drvdata(pdev, gpdata);
++
++	gpdata = ctrl_pdata;
++	//SW4-HL-Display-DynamicReadWriteRegister-00+}_20160729
++
++	pr_debug("\n\n*** [HL] %s, BBB CE_enable = %d ***\n\n", __func__, CE_enable);
++	pr_debug("\n\n*** [HL] %s, BBB CT_enable = %d ***\n\n", __func__, CT_enable);
++	pr_debug("\n\n*** [HL] %s, BBB CABC_enable = %d ***\n\n", __func__, CABC_enable);
++	pr_debug("\n\n*** [HL] %s, BBB AIE_enable = %d ***\n\n", __func__, AIE_enable);
++	pr_debug("\n\n*** [HL] %s, BBB SendCEBeforeInit = %d ***\n\n", __func__, SendCEBeforeInit);
++	pr_debug("\n\n*** [HL] %s, BBB SendCTBeforeInit = %d ***\n\n", __func__, SendCTBeforeInit);
++	pr_debug("\n\n*** [HL] %s, BBB SendCABCBeforeInit = %d ***\n\n", __func__, SendCABCBeforeInit);
++
++	if (CE_enable && CT_enable && CABC_enable)
++	{
++		pr_debug("\n\n******************** [HL] %s ---, if (CE_enable && CT_enable && CABC_enable), probe OK, return 0  **********************\n\n", __func__);
++		return 0;
++	}
++
++	if((ctrl_pdata->ce_on_cmds.cmd_cnt) &&
++		(ctrl_pdata->ce_off_cmds.cmd_cnt))
++	{
++		CE_enable = 1;
++	}
++
++	if((ctrl_pdata->ct_cold_cmds.cmd_cnt) &&
++		(ctrl_pdata->ct_normal_cmds.cmd_cnt) &&
++		(ctrl_pdata->ct_warm_cmds.cmd_cnt) &&
++		(ctrl_pdata->blf_10_cmds.cmd_cnt) &&
++		(ctrl_pdata->blf_30_cmds.cmd_cnt) &&
++		(ctrl_pdata->blf_50_cmds.cmd_cnt) &&
++		(ctrl_pdata->blf_75_cmds.cmd_cnt))
++	{
++		CT_enable = 1;
++	}
++
++	if((ctrl_pdata->cabc_off_cmds.cmd_cnt) &&
++		(ctrl_pdata->cabc_ui_cmds.cmd_cnt) &&
++		(ctrl_pdata->cabc_still_cmds.cmd_cnt) &&
++		(ctrl_pdata->cabc_moving_cmds.cmd_cnt))
++	{
++		CABC_enable = 1;
++	}
++
++	if((ctrl_pdata->aie_off_cmds.cmd_cnt) &&
++		(ctrl_pdata->aie_low_cmds.cmd_cnt) &&
++		(ctrl_pdata->aie_mid_cmds.cmd_cnt) &&
++		(ctrl_pdata->aie_high_cmds.cmd_cnt))
++	{
++		AIE_enable = 1;
++	}
++
++	if (SendCEBeforeInit && SendCTBeforeInit && SendCABCBeforeInit)
++	{
++		pr_debug("\n\n******************** [HL] %s ---, if (SendCEBeforeInit && SendCTBeforeInit && SendCABCBeforeInit), probe OK, return 0  **********************\n\n", __func__);
++
++		return 0;
++	}
++
++	if((ctrl_pdata->ce_on_cmds_beforeInit.cmd_cnt) &&
++		(ctrl_pdata->ce_off_cmds_beforeInit.cmd_cnt))
++	{
++		SendCEBeforeInit = 1;
++	}
++
++	if((ctrl_pdata->ct_cold_cmds_beforeInit.cmd_cnt) &&
++		(ctrl_pdata->ct_normal_cmds_beforeInit.cmd_cnt) &&
++	    	(ctrl_pdata->ct_warm_cmds_beforeInit.cmd_cnt) &&
++		(ctrl_pdata->blf_10_cmds_beforeInit.cmd_cnt) &&
++		(ctrl_pdata->blf_30_cmds_beforeInit.cmd_cnt) &&
++		(ctrl_pdata->blf_50_cmds_beforeInit.cmd_cnt) &&
++		(ctrl_pdata->blf_75_cmds_beforeInit.cmd_cnt))
++	{
++		SendCTBeforeInit = 1;
++	}
++
++	if((ctrl_pdata->cabc_off_cmds_beforeInit.cmd_cnt) &&
++		(ctrl_pdata->cabc_ui_cmds_beforeInit.cmd_cnt) &&
++		(ctrl_pdata->cabc_still_cmds_beforeInit.cmd_cnt) &&
++		(ctrl_pdata->cabc_moving_cmds_beforeInit.cmd_cnt))
++	{
++		SendCABCBeforeInit = 1;
++	}
++
++	if((ctrl_pdata->cabc_off_cmds_beforeInit.cmd_cnt) &&
++		(ctrl_pdata->cabc_ui_cmds_beforeInit.cmd_cnt) &&
++		(ctrl_pdata->cabc_still_cmds_beforeInit.cmd_cnt) &&
++		(ctrl_pdata->cabc_moving_cmds_beforeInit.cmd_cnt))
++	{
++		SendAIEBeforeInit = 1;
++	}
++
++	pr_debug("\n\n*** [HL] %s, AAA CE_enable = %d ***\n\n", __func__, CE_enable);
++	pr_debug("\n\n*** [HL] %s, AAA CT_enable = %d ***\n\n", __func__, CT_enable);
++	pr_debug("\n\n*** [HL] %s, AAA CABC_enable = %d ***\n\n", __func__, CABC_enable);
++	pr_debug("\n\n*** [HL] %s, AAA AIE_enable = %d ***\n\n", __func__, AIE_enable);
++	pr_debug("\n\n*** [HL] %s, AAA SendCEBeforeInit = %d ***\n\n", __func__, SendCEBeforeInit);
++	pr_debug("\n\n*** [HL] %s, AAA SendCTBeforeInit = %d ***\n\n", __func__, SendCTBeforeInit);
++	pr_debug("\n\n*** [HL] %s, AAA SendCABCBeforeInit = %d ***\n\n", __func__, SendCABCBeforeInit);
++	//SW4-HL-Display-ImplementCECTCABC-00+}_20160126
++	//SW4-HL-Display-SendCECTCABCBeforeInit-00*}_20161213
++
++	//SW4-HL-Display-GlanceMode-00+{_20170524
++	#ifdef CONFIG_AOD_FEATURE
++	if (pdata->panel_info.aod_enabled)
++	{
++		fih_mdss_dsi_aod_panel_init(pdev,ctrl_pdata,index);
++	}
++	#endif
++	//SW4-HL-Display-GlanceMode-00+}_20170524
++
+ 	return 0;
+ 
+ error_shadow_clk_deinit:
+@@ -3736,6 +5469,18 @@ static int mdss_dsi_ctrl_probe(struct platform_device *pdev)
+ error_pan_node:
+ 	mdss_dsi_unregister_bl_settings(ctrl_pdata);
+ 	of_node_put(dsi_pan_node);
++
++	pr_debug("\n\n******************** [HL] %s ---, error_pan_node, rc = %d  **********************\n\n", __func__, rc);
++
++//SW4-HL-Display-DynamicReadWriteRegister-00+{_20160729
++error_no_mem:
++	devm_kfree(&pdev->dev, ctrl_pdata);
++
++	devm_kfree(&pdev->dev, gpdata);
++
++	pr_debug("\n\n******************** [HL] %s ---, error_no_mem, rc = %d  **********************\n\n", __func__, rc);
++//SW4-HL-Display-DynamicReadWriteRegister-00+}_20160729
++
+ 	return rc;
+ }
+ 
