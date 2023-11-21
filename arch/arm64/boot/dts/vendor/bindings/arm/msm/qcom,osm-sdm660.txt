@@ -482,7 +482,7 @@ Example:
 
 		clock-names = "aux_clk", "xo_a";
 		clocks = <&clock_gcc HMSS_GPLL0_CLK_SRC>,
-			<&clock_rpmcc RPM_XO_A_CLK_SRC>;
+			<&clock_rpmcc RPM_SMD_XO_A_CLK_SRC>;
 
 		#clock-cells = <1>;
 	};

@@ -49,6 +49,12 @@
 
 #include "mdss_livedisplay.h"
 
+//SW4-HL-Display-GlanceMode-00+{_20170524
+#ifdef CONFIG_AOD_FEATURE
+#include "fih/fih_msm_mdss_aod.h"
+#endif
+//SW4-HL-Display-GlanceMode-00+}_20170524
+
 #ifdef CONFIG_FB_MSM_TRIPLE_BUFFER
 #define MDSS_FB_NUM 3
 #else
@@ -130,6 +136,13 @@ static inline uint64_t __user to_user_u64(void *ptr)
 {
 	return (uint64_t)((uintptr_t)ptr);
 }
+
+//SW4-HL-Display-GlanceMode-00+{_20170524
+#ifdef CONFIG_AOD_FEATURE
+extern int fih_set_blank_mode(int mode);
+extern int fih_get_aod(void);
+#endif
+//SW4-HL-Display-GlanceMode-00+}_20170524
 
 void mdss_fb_no_update_notify_timer_cb(struct timer_list *t)
 {

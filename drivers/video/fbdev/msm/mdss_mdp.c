@@ -23,6 +23,9 @@
 #include <linux/of_address.h>
 #include <linux/pm.h>
 #include <linux/pm_runtime.h>
+#if defined(CONFIG_PXLW_IRIS3)
+#include <linux/pm_qos.h>
+#endif
 #include <linux/regulator/consumer.h>
 #include <linux/module.h>
 #include <linux/mutex.h>

@@ -844,6 +844,20 @@ int mdss_dsi_check_panel_status(struct mdss_dsi_ctrl_pdata *ctrl, void *arg);
 void mdss_dsi_ctrl_phy_reset(struct mdss_dsi_ctrl_pdata *ctrl);
 
 void mdss_dsi_debug_bus_init(struct mdss_dsi_data *sdata);
+
+// Start
+int mdss_dsi_panel_ce_onoff(struct mdss_dsi_ctrl_pdata *ctrl_pdata, unsigned long enable);
+int mdss_dsi_panel_ct_set(struct mdss_dsi_ctrl_pdata *ctrl_pdata, unsigned long value);
+int mdss_dsi_panel_cabc_set(struct mdss_dsi_ctrl_pdata *ctrl_pdata, unsigned long value);
+int mdss_dsi_panel_aie_set(struct mdss_dsi_ctrl_pdata *ctrl_pdata, unsigned long value);
+// End
+
+//SW4-HL-Display-DynamicReadWriteRegister-00+{_20160729
+void mdss_dsi_panel_read_reg_get(char *reg_val);
+void mdss_dsi_panel_read_reg_set(struct mdss_dsi_ctrl_pdata *ctrl_pdata, unsigned int reg, unsigned int reg_len);
+void mdss_dsi_panel_write_reg_set(struct mdss_dsi_ctrl_pdata *ctrl_pdata, unsigned int len, char *data);
+//SW4-HL-Display-DynamicReadWriteRegister-00+}_20160729
+
 int mdss_dsi_get_dt_vreg_data(struct device *dev,
 	struct device_node *of_node, struct dss_module_power *mp,
 	enum dsi_pm_type module);
