@@ -1,5 +1,5 @@
 /************************************************************************
-* Copyright (C) 2012-2015, Focaltech Systems (R)ï¿½ï¿½All Rights Reserved.
+* Copyright (C) 2012-2015, Focaltech Systems (R)£¬All Rights Reserved.
 *
 * File Name: focaltech_test_ini.c
 *
@@ -57,7 +57,7 @@ int fts_strncmp(const char *cs, const char *ct, size_t count)
 /*************************************************************
 Function:  Get the value of key
 Input: char * filedata; char * section; char * key
-Output: char * valueï¿½ï¿½key
+Output: char * value¡¡key
 Return: 0       SUCCESS
         -1      can not find section
         -2      can not find key

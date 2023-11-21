@@ -34,6 +34,7 @@
 #include <linux/of_gpio.h>
 #include "synaptics_tcm_core.h"
 #include "linux/moduleparam.h"
+#include <drm/drm_panel.h>
 
 #define XFER_ATTEMPTS 10
 

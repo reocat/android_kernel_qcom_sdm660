@@ -1,5 +1,5 @@
 /************************************************************************
-* Copyright (C) 2012-2015, Focaltech Systems (R)ï¿½ï¿½All Rights Reserved.
+* Copyright (C) 2012-2015, Focaltech Systems (R)£¬All Rights Reserved.
 *
 * File Name: focaltech_test_detail_threshold.c
 *
@@ -961,7 +961,7 @@ void OnInit_DThreshold_SCapCbTest(char *strIniFile)
     MinValue = fts_atoi(str);
     GetPrivateProfileString("Basic_Threshold","SCapCbTest_ON_Max","240",str,strIniFile);
     MaxValue = fts_atoi(str);
-    //////ï¿½ï¿½È¡ï¿½ï¿½Öµï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ã£ï¿½ï¿½ï¿½ï¿½ï¿½Basic_Thresholdï¿½ï¿½ï¿½
+    //////¶ÁÈ¡ãÐÖµ£¬ÈôÎÞÌØÊâÉèÖÃ£¬ÔòÒÔBasic_ThresholdÌæ´ú
 
     ///Max
     for (i = 0; i < 2; i++)
@@ -1421,7 +1421,7 @@ void OnInit_DThreshold_ForceTouch_SCapRawDataTest(char *strIniFile)
     MaxValue = fts_atoi(str);
 
     //FTS_TEST_DBG("%d:%d\r", MinValue, MaxValue);
-    //////ï¿½ï¿½È¡ï¿½ï¿½Öµï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ã£ï¿½ï¿½ï¿½ï¿½ï¿½Basic_Thresholdï¿½ï¿½ï¿½
+    //////¶ÁÈ¡ãÐÖµ£¬ÈôÎÞÌØÊâÉèÖÃ£¬ÔòÒÔBasic_ThresholdÌæ´ú
 
     ///Max
     for (i = 0; i < 1; i++)
@@ -1515,7 +1515,7 @@ void OnInit_DThreshold_ForceTouch_SCapCbTest(char *strIniFile)
     MaxValue = fts_atoi(str);
 
     //FTS_TEST_DBG("%d:%d\r", MinValue, MaxValue);
-    //////ï¿½ï¿½È¡ï¿½ï¿½Öµï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ã£ï¿½ï¿½ï¿½ï¿½ï¿½Basic_Thresholdï¿½ï¿½ï¿½
+    //////¶ÁÈ¡ãÐÖµ£¬ÈôÎÞÌØÊâÉèÖÃ£¬ÔòÒÔBasic_ThresholdÌæ´ú
 
     ///Max
     for (i = 0; i < 1; i++)

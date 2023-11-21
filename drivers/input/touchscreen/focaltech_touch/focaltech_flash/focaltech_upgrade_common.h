@@ -1,5 +1,5 @@
 /************************************************************************
-* Copyright (C) 2012-2016, Focaltech Systems (R)ï¿½ï¿½All Rights Reserved.
+* Copyright (C) 2012-2016, Focaltech Systems (R)£¬All Rights Reserved.
 *
 * File Name: focaltech_upgrade_common.h
 *

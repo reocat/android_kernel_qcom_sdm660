@@ -66,7 +66,7 @@
 *****************************************************************************/
 
 /////////////////////////////////////////////////////////////////////////////
-////Get IC NAMEï¿½ï¿½From IC CODE
+////Get IC NAME£¬From IC CODE
 /////////////////////////////////////////////////////////////////////////////
 unsigned int fts_ic_table_get_ic_code_from_ic_name(char * strIcName)
 {
@@ -157,7 +157,7 @@ unsigned int fts_ic_table_get_ic_code_from_ic_name(char * strIcName)
 }
 
 /////////////////////////////////////////////////////////////////////////////
-////Get IC CODEï¿½ï¿½From IC NAME
+////Get IC CODE£¬From IC NAME
 /////////////////////////////////////////////////////////////////////////////
 void fts_ic_table_get_ic_name_from_ic_code(unsigned int ucIcCode, char * strIcName)
 {
@@ -246,7 +246,7 @@ void fts_ic_table_get_ic_name_from_ic_code(unsigned int ucIcCode, char * strIcNa
 }
 
 /////////////////////////////////////////////////////////////////////////////
-////Get IC CODEï¿½ï¿½From CHIP ID
+////Get IC CODE£¬From CHIP ID
 /////////////////////////////////////////////////////////////////////////////
 unsigned int fts_ic_table_get_ic_code_from_chip_id(unsigned char chip_id, unsigned char chip_id2)
 {
@@ -317,7 +317,7 @@ unsigned int fts_ic_table_get_ic_code_from_chip_id(unsigned char chip_id, unsign
     return ic_code;
 }
 /////////////////////////////////////////////////////////////////////////////
-////Get CHIP IDï¿½ï¿½From IC CODE
+////Get CHIP ID£¬From IC CODE
 /////////////////////////////////////////////////////////////////////////////
 unsigned int fts_ic_table_get_chip_id_from_ic_code(unsigned int ic_code, unsigned char *chip_id, unsigned char *chip_id2)
 {

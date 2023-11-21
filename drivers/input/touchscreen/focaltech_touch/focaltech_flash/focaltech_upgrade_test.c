@@ -34,7 +34,7 @@
 *****************************************************************************/
 #include "../focaltech_core.h"
 #include "../focaltech_flash.h"
-#include <linux/wakelock.h>
+//#include <linux/wakelock.h>
 #include <linux/timer.h>
 
 /*****************************************************************************
@@ -45,7 +45,7 @@
 /*****************************************************************************
 * Global variable or extern global variabls/functions
 *****************************************************************************/
-struct wake_lock ps_lock;
+//struct wake_lock ps_lock;
 
 #define FTS_DEBUG_UPGRADE(fmt, args...) do{\
                                                 printk(KERN_ERR "[FTS][UPGRADE]:##############################################################################\n");\
