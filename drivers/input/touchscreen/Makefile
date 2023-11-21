@@ -113,7 +113,6 @@ obj-$(CONFIG_TOUCHSCREEN_COLIBRI_VF50)	+= colibri-vf50-ts.o
 obj-$(CONFIG_TOUCHSCREEN_ROHM_BU21023)	+= rohm_bu21023.o
 obj-$(CONFIG_TOUCHSCREEN_ST)		+= st/
 obj-$(CONFIG_TOUCHSCREEN_NT36xxx) += nt36xxx/
-obj-y += gt1x/
 obj-$(CONFIG_TOUCHSCREEN_GT9XX) += gt9xx/
 obj-$(CONFIG_TOUCHSCREEN_FT8719) += focaltech_touch_8719/
 obj-$(CONFIG_TOUCHSCREEN_SYNAPTICS_DSX) += synaptics_dsx/

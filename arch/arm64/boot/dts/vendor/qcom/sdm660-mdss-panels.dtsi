@@ -1,3 +1,15 @@
+/* Copyright (c) 2016-2018, The Linux Foundation. All rights reserved.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 and
+ * only version 2 as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ */
+
 #include "dsi-panel-sim-video.dtsi"
 #include "dsi-panel-sim-dualmipi-video.dtsi"
 #include "dsi-panel-nt35597-truly-dualmipi-wqxga-video.dtsi"
@@ -137,9 +149,6 @@
 		808302432 811656384>;
 	qcom,mdss-dsi-pan-enable-dynamic-fps;
 	qcom,mdss-dsi-pan-fps-update = "dfps_immediate_porch_mode_vfp";
-	qcom,mdss-dsi-tx-eot-append;
-	qcom,mdss-dsi-t-clk-post = <0x0d>;
-	qcom,mdss-dsi-t-clk-pre = <0x2d>;
 };
 
 &dsi_dual_nt35597_truly_cmd {
@@ -156,10 +165,6 @@
 	qcom,mdss-dsi-panel-on-check-value = <0x9c>;
 	qcom,mdss-dsi-panel-status-read-length = <1>;
 	qcom,mdss-dsi-panel-max-error-count = <3>;
-	qcom,mdss-dsi-tx-eot-append;
-	qcom,mdss-dsi-t-clk-post = <0x0d>;
-	qcom,mdss-dsi-t-clk-pre = <0x2d>;
-	qcom,ulps-enabled;
 };
 
 &dsi_dual_nt36850_truly_cmd {
@@ -190,6 +195,7 @@
 		20 1d 05 07 03 03 04 a0
 		20 1d 05 07 03 03 04 a0
 		20 12 05 06 03 13 04 a0];
+	qcom,config-select = <&dsi_nt35597_truly_dsc_video_config2>;
 	qcom,mdss-dsi-min-refresh-rate = <53>;
 	qcom,mdss-dsi-max-refresh-rate = <60>;
 	qcom,mdss-dsi-pan-enable-dynamic-fps;
@@ -210,6 +216,7 @@
 		20 1d 05 07 03 03 04 a0
 		20 1d 05 07 03 03 04 a0
 		20 12 05 06 03 13 04 a0];
+	qcom,config-select = <&dsi_nt35597_truly_dsc_cmd_config2>;
 	qcom,esd-check-enabled;
 	qcom,mdss-dsi-panel-status-check-mode = "reg_read";
 	qcom,mdss-dsi-panel-status-command = [06 01 00 01 00 00 01 0a];

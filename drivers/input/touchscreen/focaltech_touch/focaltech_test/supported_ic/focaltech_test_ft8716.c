@@ -1,5 +1,5 @@
 /************************************************************************
-* Copyright (C) 2012-2015, Focaltech Systems (R)ï¿½ï¿½All Rights Reserved.
+* Copyright (C) 2012-2015, Focaltech Systems (R)£¬All Rights Reserved.
 *
 * File Name: focaltech_test_ft8716.c
 *

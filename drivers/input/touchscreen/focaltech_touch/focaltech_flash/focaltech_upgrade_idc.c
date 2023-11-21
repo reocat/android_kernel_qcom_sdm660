@@ -332,7 +332,7 @@ int fts_ctpm_erase_flash(struct i2c_client *client)
 
     for (i = 0; i < 15; i++)
     {
-        /*get the erase app status, if get 0xF0AAï¿½ï¿½erase flash success*/
+        /*get the erase app status, if get 0xF0AA£¬erase flash success*/
         auc_i2c_write_buf[0] = 0x6a;
         reg_val[0] = reg_val[1] = 0x00;
         fts_i2c_read(client, auc_i2c_write_buf, 1, reg_val, 2);

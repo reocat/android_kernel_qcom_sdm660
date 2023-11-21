@@ -1,5 +1,5 @@
 /************************************************************************
-* Copyright (C) 2012-2015, Focaltech Systems (R)锟斤拷All Rights Reserved.
+* Copyright (C) 2012-2015, Focaltech Systems (R)，All Rights Reserved.
 *
 * File Name: focaltech_test_detail_threshold.h
 *
@@ -28,7 +28,7 @@
 
 struct stCfg_Incell_DetailThreshold
 {
-    unsigned char (*InvalidNode)[RX_NUM_MAX];//锟斤拷效锟节点，锟斤拷锟斤拷锟矫诧拷锟皆的节碉拷
+    unsigned char (*InvalidNode)[RX_NUM_MAX];//无效节点，即不用测试的节点
 
 
     int (*RawDataTest_Min)[RX_NUM_MAX];

@@ -1,1531 +1,718 @@
+// SPDX-License-Identifier: GPL-2.0-only
 /*
-** =============================================================================
-** Copyright (c) 2014  Texas Instruments Inc.
-**
-** This program is free software; you can redistribute it and/or
-** modify it under the terms of the GNU General Public License
-** as published by the Free Software Foundation; either version 2
-** of the License, or (at your option) any later version.
-**
-** This program is distributed in the hope that it will be useful,
-** but WITHOUT ANY WARRANTY; without even the implied warranty of
-** MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-** GNU General Public License for more details.
-**
-** You should have received a copy of the GNU General Public License
-** along with this program; if not, write to the Free Software
-** Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
-**
-** File:
-**     drv2605l.c
-**
-** Description:
-**     DRV2605L chip driver
-**
-** =============================================================================
-*/
-#include <linux/init.h>
-#include <linux/module.h>
-#include <linux/kernel.h>
-#include <linux/slab.h>
-#include <linux/types.h>
-#include <linux/fs.h>
+ * DRV260X haptics driver family
+ *
+ * Authors: Dan Murphy <dmurphy@ti.com>, Vincent Zhao <code@gyroknight.com>
+ *
+ * Copyright:   (C) 2014 Texas Instruments, Inc.
+ */
+
 #include <linux/i2c.h>
-#include <linux/semaphore.h>
-#include <linux/device.h>
-#include <linux/syscalls.h>
-#include <asm/uaccess.h>
-#include <linux/gpio.h>
-#include <linux/sched.h>
-#include <linux/spinlock_types.h>
-#include <linux/spinlock.h>
+#include <linux/input.h>
+#include <linux/module.h>
+#include <linux/regmap.h>
+#include <linux/slab.h>
 #include <linux/delay.h>
-#include <linux/jiffies.h>
-#include <linux/err.h>
-#include <linux/clk.h>
-#include <linux/of_gpio.h>
-#include <linux/haptics/drv2605l.h>
+#include <linux/gpio/consumer.h>
+#include <linux/regulator/consumer.h>
 
-static struct drv2605L_data *pDRV2605Ldata = NULL;
+#include <dt-bindings/input/ti-drv260x.h>
 
-int getPatternValue=0;
+// clang-format off
+#define DRV260X_STATUS           0x0
+#define DRV260X_MODE             0x1
+#define DRV260X_RT_PB_IN         0x2
+#define DRV260X_LIB_SEL          0x3
+#define DRV260X_WV_SEQ_1         0x4
+#define DRV260X_WV_SEQ_2         0x5
+#define DRV260X_WV_SEQ_3         0x6
+#define DRV260X_WV_SEQ_4         0x7
+#define DRV260X_WV_SEQ_5         0x8
+#define DRV260X_WV_SEQ_6         0x9
+#define DRV260X_WV_SEQ_7         0xa
+#define DRV260X_WV_SEQ_8         0xb
+#define DRV260X_GO               0xc
+#define DRV260X_OVERDRIVE_OFF    0xd
+#define DRV260X_SUSTAIN_P_OFF    0xe
+#define DRV260X_SUSTAIN_N_OFF    0xf
+#define DRV260X_BRAKE_OFF        0x10
+#define DRV260X_A_TO_V_CTRL      0x11
+#define DRV260X_A_TO_V_MIN_INPUT 0x12
+#define DRV260X_A_TO_V_MAX_INPUT 0x13
+#define DRV260X_A_TO_V_MIN_OUT   0x14
+#define DRV260X_A_TO_V_MAX_OUT   0x15
+#define DRV260X_RATED_VOLT       0x16
+#define DRV260X_OD_CLAMP_VOLT    0x17
+#define DRV260X_CAL_COMP         0x18
+#define DRV260X_CAL_BACK_EMF     0x19
+#define DRV260X_FEEDBACK_CTRL    0x1a
+#define DRV260X_CTRL1            0x1b
+#define DRV260X_CTRL2            0x1c
+#define DRV260X_CTRL3            0x1d
+#define DRV260X_CTRL4            0x1e
+#define DRV260X_CTRL5            0x1f
+#define DRV260X_LRA_LOOP_PERIOD  0x20
+#define DRV260X_VBAT_MON         0x21
+#define DRV260X_LRA_RES_PERIOD   0x22
+#define DRV260X_MAX_REG          0x23
 
+#define DRV260X_GO_BIT           0x01
 
-int vibrator_get_pattern_value()
+/* Library Selection */
+#define DRV260X_LIB_SEL_MASK     0x07
+#define DRV260X_LIB_SEL_RAM      0x0
+#define DRV260X_LIB_SEL_OD       0x1
+#define DRV260X_LIB_SEL_40_60    0x2
+#define DRV260X_LIB_SEL_60_80    0x3
+#define DRV260X_LIB_SEL_100_140  0x4
+#define DRV260X_LIB_SEL_140_PLUS 0x5
+
+#define DRV260X_LIB_SEL_HIZ_MASK 0x10
+#define DRV260X_LIB_SEL_HIZ_EN   0x01
+#define DRV260X_LIB_SEL_HIZ_DIS  0
+
+/* Mode register */
+#define DRV260X_STANDBY           (1 << 6)
+#define DRV260X_STANDBY_MASK      0x40
+#define DRV260X_INTERNAL_TRIGGER  0x00
+#define DRV260X_EXT_TRIGGER_EDGE  0x01
+#define DRV260X_EXT_TRIGGER_LEVEL 0x02
+#define DRV260X_PWM_ANALOG_IN     0x03
+#define DRV260X_AUDIOHAPTIC       0x04
+#define DRV260X_RT_PLAYBACK       0x05
+#define DRV260X_DIAGNOSTICS       0x06
+#define DRV260X_AUTO_CAL          0x07
+
+/* Audio to Haptics Control */
+#define DRV260X_AUDIO_HAPTICS_PEAK_10MS (0 << 2)
+#define DRV260X_AUDIO_HAPTICS_PEAK_20MS (1 << 2)
+#define DRV260X_AUDIO_HAPTICS_PEAK_30MS (2 << 2)
+#define DRV260X_AUDIO_HAPTICS_PEAK_40MS (3 << 2)
+
+#define DRV260X_AUDIO_HAPTICS_FILTER_100HZ 0x00
+#define DRV260X_AUDIO_HAPTICS_FILTER_125HZ 0x01
+#define DRV260X_AUDIO_HAPTICS_FILTER_150HZ 0x02
+#define DRV260X_AUDIO_HAPTICS_FILTER_200HZ 0x03
+
+/* Min/Max Input/Output Voltages */
+#define DRV260X_AUDIO_HAPTICS_MIN_IN_VOLT  0x19
+#define DRV260X_AUDIO_HAPTICS_MAX_IN_VOLT  0x64
+#define DRV260X_AUDIO_HAPTICS_MIN_OUT_VOLT 0x19
+#define DRV260X_AUDIO_HAPTICS_MAX_OUT_VOLT 0xFF
+
+/* Feedback register */
+#define DRV260X_FB_REG_ERM_MODE 0x7f
+#define DRV260X_FB_REG_LRA_MODE (1 << 7)
+
+#define DRV260X_BRAKE_FACTOR_MASK 0x1f
+#define DRV260X_BRAKE_FACTOR_2X   (1 << 0)
+#define DRV260X_BRAKE_FACTOR_3X   (2 << 4)
+#define DRV260X_BRAKE_FACTOR_4X   (3 << 4)
+#define DRV260X_BRAKE_FACTOR_6X   (4 << 4)
+#define DRV260X_BRAKE_FACTOR_8X   (5 << 4)
+#define DRV260X_BRAKE_FACTOR_16   (6 << 4)
+#define DRV260X_BRAKE_FACTOR_DIS  (7 << 4)
+
+#define DRV260X_LOOP_GAIN_LOW       0xf3
+#define DRV260X_LOOP_GAIN_MED       (1 << 2)
+#define DRV260X_LOOP_GAIN_HIGH      (2 << 2)
+#define DRV260X_LOOP_GAIN_VERY_HIGH (3 << 2)
+
+#define DRV260X_BEMF_GAIN_0 0xfc
+#define DRV260X_BEMF_GAIN_1 (1 << 0)
+#define DRV260X_BEMF_GAIN_2 (2 << 0)
+#define DRV260X_BEMF_GAIN_3 (3 << 0)
+
+/* Control 1 register */
+#define DRV260X_AC_CPLE_EN    (1 << 5)
+#define DRV260X_STARTUP_BOOST (1 << 7)
+
+/* Control 2 register */
+
+#define DRV260X_IDISS_TIME_45  0
+#define DRV260X_IDISS_TIME_75  (1 << 0)
+#define DRV260X_IDISS_TIME_150 (1 << 1)
+#define DRV260X_IDISS_TIME_225 0x03
+
+#define DRV260X_BLANK_TIME_45  (0 << 2)
+#define DRV260X_BLANK_TIME_75  (1 << 2)
+#define DRV260X_BLANK_TIME_150 (2 << 2)
+#define DRV260X_BLANK_TIME_225 (3 << 2)
+
+#define DRV260X_SAMP_TIME_150 (0 << 4)
+#define DRV260X_SAMP_TIME_200 (1 << 4)
+#define DRV260X_SAMP_TIME_250 (2 << 4)
+#define DRV260X_SAMP_TIME_300 (3 << 4)
+
+#define DRV260X_BRAKE_STABILIZER (1 << 6)
+#define DRV260X_UNIDIR_IN        (0 << 7)
+#define DRV260X_BIDIR_IN         (1 << 7)
+
+/* Control 3 Register */
+#define DRV260X_LRA_OPEN_LOOP     (1 << 0)
+#define DRV260X_ANANLOG_IN        (1 << 1)
+#define DRV260X_LRA_DRV_MODE      (1 << 2)
+#define DRV260X_RTP_UNSIGNED_DATA (1 << 3)
+#define DRV260X_SUPPLY_COMP_DIS   (1 << 4)
+#define DRV260X_ERM_OPEN_LOOP     (1 << 5)
+#define DRV260X_NG_THRESH_0       (0 << 6)
+#define DRV260X_NG_THRESH_2       (1 << 6)
+#define DRV260X_NG_THRESH_4       (2 << 6)
+#define DRV260X_NG_THRESH_8       (3 << 6)
+
+/* Control 4 Register */
+#define DRV260X_AUTOCAL_TIME_150MS  (0 << 4)
+#define DRV260X_AUTOCAL_TIME_250MS  (1 << 4)
+#define DRV260X_AUTOCAL_TIME_500MS  (2 << 4)
+#define DRV260X_AUTOCAL_TIME_1000MS (3 << 4)
+
+/* Character Device driver constants */
+#define DRV2605L_DRV_NAME "drv2605l"
+// clang-format on
+
+/**
+ * struct drv260x_data -
+ * @input_dev - Pointer to the input device
+ * @client - Pointer to the I2C client
+ * @regmap - Register map of the device
+ * @work - Work item used to off load the enable/disable of the vibration
+ * @enable_gpio - Pointer to the gpio used for enable/disabling
+ * @regulator - Pointer to the regulator for the IC
+ * @magnitude - Magnitude of the vibration event
+ * @mode - The operating mode of the IC (LRA_NO_CAL, ERM or LRA)
+ * @library - The vibration library to be used
+ * @rated_voltage - The rated_voltage of the actuator
+ * @overdriver_voltage - The over drive voltage of the actuator
+**/
+struct drv260x_data {
+	struct input_dev *input_dev;
+	struct i2c_client *client;
+	struct regmap *regmap;
+	struct work_struct work;
+	struct gpio_desc *enable_gpio;
+	struct regulator *regulator;
+	u32 magnitude;
+	u32 mode;
+	u32 library;
+	int rated_voltage;
+	int overdrive_voltage;
+};
+
+// Driver-specific metadata
+struct drv2605l_driver {
+	// Character device driver fields
+	dev_t devt;
+};
+
+static struct drv2605l_driver char_driver_data;
+
+static const struct reg_default drv260x_reg_defs[] = {
+	{ DRV260X_STATUS, 0xe0 },
+	{ DRV260X_MODE, 0x40 },
+	{ DRV260X_RT_PB_IN, 0x00 },
+	{ DRV260X_LIB_SEL, 0x00 },
+	{ DRV260X_WV_SEQ_1, 0x01 },
+	{ DRV260X_WV_SEQ_2, 0x00 },
+	{ DRV260X_WV_SEQ_3, 0x00 },
+	{ DRV260X_WV_SEQ_4, 0x00 },
+	{ DRV260X_WV_SEQ_5, 0x00 },
+	{ DRV260X_WV_SEQ_6, 0x00 },
+	{ DRV260X_WV_SEQ_7, 0x00 },
+	{ DRV260X_WV_SEQ_8, 0x00 },
+	{ DRV260X_GO, 0x00 },
+	{ DRV260X_OVERDRIVE_OFF, 0x00 },
+	{ DRV260X_SUSTAIN_P_OFF, 0x00 },
+	{ DRV260X_SUSTAIN_N_OFF, 0x00 },
+	{ DRV260X_BRAKE_OFF, 0x00 },
+	{ DRV260X_A_TO_V_CTRL, 0x05 },
+	{ DRV260X_A_TO_V_MIN_INPUT, 0x19 },
+	{ DRV260X_A_TO_V_MAX_INPUT, 0xff },
+	{ DRV260X_A_TO_V_MIN_OUT, 0x19 },
+	{ DRV260X_A_TO_V_MAX_OUT, 0xff },
+	{ DRV260X_RATED_VOLT, 0x3e },
+	{ DRV260X_OD_CLAMP_VOLT, 0x8c },
+	{ DRV260X_CAL_COMP, 0x0c },
+	{ DRV260X_CAL_BACK_EMF, 0x6c },
+	{ DRV260X_FEEDBACK_CTRL, 0x36 },
+	{ DRV260X_CTRL1, 0x93 },
+	{ DRV260X_CTRL2, 0xfa },
+	{ DRV260X_CTRL3, 0xa0 },
+	{ DRV260X_CTRL4, 0x20 },
+	{ DRV260X_CTRL5, 0x80 },
+	{ DRV260X_LRA_LOOP_PERIOD, 0x33 },
+	{ DRV260X_VBAT_MON, 0x00 },
+	{ DRV260X_LRA_RES_PERIOD, 0x00 },
+};
+
+#define DRV260X_DEF_RATED_VOLT 0x90
+#define DRV260X_DEF_OD_CLAMP_VOLT 0x90
+
+static struct class drv2605l_class = {
+	.name = "drv2605l",
+	.owner = THIS_MODULE,
+};
+
+// Character device driver functions
+
+static ssize_t drv2605l_mode_show(struct device *dev,
+				  struct device_attribute *attr, char *buf)
 {
-	return getPatternValue;
+	return sprintf(buf, "test\n");
 }
 
-void vibrator_set_pattern_value(int value)
+static ssize_t drv2605l_mode_store(struct device *dev,
+				   struct device_attribute *attr,
+				   const char *buf, size_t count)
 {
-	getPatternValue = value;
-}
-
-/* sysfs store function for ramp step */
-static ssize_t qpnp_hap_pattern_store(struct device *dev,
-		struct device_attribute *attr, const char *buf, size_t count)
-{
-	int data, rc;
-	struct timed_output_dev *to_dev = dev_get_drvdata(dev);
-	struct drv2605L_data *pDrv2605Ldata = container_of(to_dev, struct drv2605L_data, to_dev);
-
-	rc = kstrtoint(buf, 10, &data);
-	if (rc)
-		return rc;
-
-	printk("qpnp_hap_pattern_store vibrator get pattern value is %d\n",data);
-	vibrator_set_pattern_value(data);
-
-	cancel_work_sync(&pDrv2605Ldata->vibrator_pattern_work);
-	schedule_work(&pDrv2605Ldata->vibrator_pattern_work);
-
 	return count;
 }
 
-static struct device_attribute qpnp_hap_attrs[] = {
-	__ATTR(pattern, 0664, NULL, qpnp_hap_pattern_store),
+static struct device_attribute drv2605l_mode = {
+	.attr = {
+		.name = "mode",
+		.mode = S_IWUSR | S_IRUGO,
+	},
+	.show = drv2605l_mode_show,
+	.store = drv2605l_mode_store,
 };
 
-static int drv2605L_reg_read(struct drv2605L_data *pDrv2605Ldata, unsigned int reg)
+/**
+ * Rated and Overdriver Voltages:
+ * Calculated using the formula r = v * 255 / 5.6
+ * where r is what will be written to the register
+ * and v is the rated or overdriver voltage of the actuator
+ **/
+static int drv260x_calculate_voltage(unsigned int voltage)
 {
-	unsigned int val;
-	int ret;
-	
-	ret = regmap_read(pDrv2605Ldata->regmap, reg, &val);
-    
-	if (ret < 0)
-		return ret;
-	else
-		return val;
+	return (voltage * 255 / 5600);
 }
 
-static int drv2605L_reg_write(struct drv2605L_data *pDrv2605Ldata, unsigned char reg, char val)
+static void drv260x_worker(struct work_struct *work)
 {
-    //printk(KERN_ERR"%s, reg=%x val=%x \n", __FUNCTION__, reg, val);
-    return regmap_write(pDrv2605Ldata->regmap, reg, val);
+	struct drv260x_data *haptics =
+		container_of(work, struct drv260x_data, work);
+	int error;
+
+	gpiod_set_value(haptics->enable_gpio, 1);
+	/* Data sheet says to wait 250us before trying to communicate */
+	udelay(250);
+
+	error = regmap_write(haptics->regmap, DRV260X_MODE,
+			     DRV260X_RT_PLAYBACK);
+	if (error) {
+		dev_err(&haptics->client->dev, "Failed to write set mode: %d\n",
+			error);
+	} else {
+		error = regmap_write(haptics->regmap, DRV260X_RT_PB_IN,
+				     haptics->magnitude);
+		if (error)
+			dev_err(&haptics->client->dev,
+				"Failed to set magnitude: %d\n", error);
+	}
 }
 
-static int drv2605L_bulk_read(struct drv2605L_data *pDrv2605Ldata, unsigned char reg, unsigned int count, u8 *buf)
+// Only used for force feedback
+// static int drv260x_haptics_play(struct input_dev *input, void *data,
+//                                 struct ff_effect *effect)
+// {
+//     struct drv260x_data *haptics = input_get_drvdata(input);
+
+//     haptics->mode = DRV260X_LRA_NO_CAL_MODE;
+
+//     if (effect->u.rumble.strong_magnitude > 0)
+//         haptics->magnitude = effect->u.rumble.strong_magnitude;
+//     else if (effect->u.rumble.weak_magnitude > 0)
+//         haptics->magnitude = effect->u.rumble.weak_magnitude;
+//     else
+//         haptics->magnitude = 0;
+
+//     schedule_work(&haptics->work);
+
+//     return 0;
+// }
+
+static void drv260x_close(struct input_dev *input)
 {
-	return regmap_bulk_read(pDrv2605Ldata->regmap, reg, buf, count);
+	struct drv260x_data *haptics = input_get_drvdata(input);
+	int error;
+
+	cancel_work_sync(&haptics->work);
+
+	error = regmap_write(haptics->regmap, DRV260X_MODE, DRV260X_STANDBY);
+	if (error)
+		dev_err(&haptics->client->dev,
+			"Failed to enter standby mode: %d\n", error);
+
+	gpiod_set_value(haptics->enable_gpio, 0);
 }
 
-static int drv2605L_bulk_write(struct drv2605L_data *pDrv2605Ldata, unsigned char reg, unsigned int count, const u8 *buf)
-{
-	return regmap_bulk_write(pDrv2605Ldata->regmap, reg, buf, count);
-}
+static const struct reg_sequence drv260x_lra_cal_regs[] = {
+	{ DRV260X_MODE, DRV260X_AUTO_CAL },
+	{ DRV260X_CTRL3, DRV260X_NG_THRESH_2 },
+	{ DRV260X_FEEDBACK_CTRL, DRV260X_FB_REG_LRA_MODE |
+					 DRV260X_BRAKE_FACTOR_4X |
+					 DRV260X_LOOP_GAIN_HIGH },
+};
 
-static int drv2605L_set_bits(struct drv2605L_data *pDrv2605Ldata, unsigned char reg, unsigned char mask, unsigned char val)
-{
-	return regmap_update_bits(pDrv2605Ldata->regmap, reg, mask, val);
-}
+static const struct reg_sequence drv260x_lra_init_regs[] = {
+	{ DRV260X_MODE, DRV260X_RT_PLAYBACK },
+	{ DRV260X_A_TO_V_CTRL, DRV260X_AUDIO_HAPTICS_PEAK_20MS |
+				       DRV260X_AUDIO_HAPTICS_FILTER_125HZ },
+	{ DRV260X_A_TO_V_MIN_INPUT, DRV260X_AUDIO_HAPTICS_MIN_IN_VOLT },
+	{ DRV260X_A_TO_V_MAX_INPUT, DRV260X_AUDIO_HAPTICS_MAX_IN_VOLT },
+	{ DRV260X_A_TO_V_MIN_OUT, DRV260X_AUDIO_HAPTICS_MIN_OUT_VOLT },
+	{ DRV260X_A_TO_V_MAX_OUT, DRV260X_AUDIO_HAPTICS_MAX_OUT_VOLT },
+	{ DRV260X_FEEDBACK_CTRL,
+	  DRV260X_FB_REG_LRA_MODE | DRV260X_BRAKE_FACTOR_2X |
+		  DRV260X_LOOP_GAIN_MED | DRV260X_BEMF_GAIN_3 },
+	{ DRV260X_CTRL1, DRV260X_STARTUP_BOOST },
+	{ DRV260X_CTRL2, DRV260X_SAMP_TIME_250 },
+	{ DRV260X_CTRL3, DRV260X_NG_THRESH_2 | DRV260X_ANANLOG_IN },
+	{ DRV260X_CTRL4, DRV260X_AUTOCAL_TIME_500MS },
+};
 
-static int drv2605L_set_go_bit(struct drv2605L_data *pDrv2605Ldata, unsigned char val)
-{
-	return drv2605L_reg_write(pDrv2605Ldata, GO_REG, (val&0x01));
-}
-#if 0
-static void drv2605L_poll_go_bit(struct drv2605L_data *pDrv2605Ldata)
-{
-    while (drv2605L_reg_read(pDrv2605Ldata, GO_REG) == GO)
-      schedule_timeout_interruptible(msecs_to_jiffies(GO_BIT_POLL_INTERVAL));
-}
-#endif
-static int drv2605L_select_library(struct drv2605L_data *pDrv2605Ldata, unsigned char lib)
-{
-	return drv2605L_reg_write(pDrv2605Ldata, LIBRARY_SELECTION_REG, (lib&0x07));
-}
+static const struct reg_sequence drv260x_erm_cal_regs[] = {
+	{ DRV260X_MODE, DRV260X_AUTO_CAL },
+	{ DRV260X_A_TO_V_MIN_INPUT, DRV260X_AUDIO_HAPTICS_MIN_IN_VOLT },
+	{ DRV260X_A_TO_V_MAX_INPUT, DRV260X_AUDIO_HAPTICS_MAX_IN_VOLT },
+	{ DRV260X_A_TO_V_MIN_OUT, DRV260X_AUDIO_HAPTICS_MIN_OUT_VOLT },
+	{ DRV260X_A_TO_V_MAX_OUT, DRV260X_AUDIO_HAPTICS_MAX_OUT_VOLT },
+	{ DRV260X_FEEDBACK_CTRL, DRV260X_BRAKE_FACTOR_3X |
+					 DRV260X_LOOP_GAIN_MED |
+					 DRV260X_BEMF_GAIN_2 },
+	{ DRV260X_CTRL1, DRV260X_STARTUP_BOOST },
+	{ DRV260X_CTRL2, DRV260X_SAMP_TIME_250 | DRV260X_BLANK_TIME_75 |
+				 DRV260X_IDISS_TIME_75 },
+	{ DRV260X_CTRL3, DRV260X_NG_THRESH_2 | DRV260X_ERM_OPEN_LOOP },
+	{ DRV260X_CTRL4, DRV260X_AUTOCAL_TIME_500MS },
+};
 
-static int drv2605L_set_rtp_val(struct drv2605L_data *pDrv2605Ldata, char value)
+static int drv260x_init(struct drv260x_data *haptics)
 {
-	/* please be noted: in unsigned mode, maximum is 0xff, in signed mode, maximum is 0x7f */
-	return drv2605L_reg_write(pDrv2605Ldata, REAL_TIME_PLAYBACK_REG, value);
-}
+	int error;
+	unsigned int cal_buf;
 
-static int drv2605L_set_waveform_sequence(struct drv2605L_data *pDrv2605Ldata, unsigned char* seq, unsigned int size)
-{
-	return drv2605L_bulk_write(pDrv2605Ldata, WAVEFORM_SEQUENCER_REG, (size>WAVEFORM_SEQUENCER_MAX)?WAVEFORM_SEQUENCER_MAX:size, seq);
-}
+	error = regmap_write(haptics->regmap, DRV260X_RATED_VOLT,
+			     haptics->rated_voltage);
+	if (error) {
+		dev_err(&haptics->client->dev,
+			"Failed to write DRV260X_RATED_VOLT register: %d\n",
+			error);
+		return error;
+	}
 
-static void drv2605L_change_mode(struct drv2605L_data *pDrv2605Ldata, char work_mode, char dev_mode)
-{
-	/* please be noted : LRA open loop cannot be used with analog input mode */
-	if(dev_mode == DEV_IDLE){
-		pDrv2605Ldata->dev_mode = dev_mode;
-		pDrv2605Ldata->work_mode = work_mode;
-	}else if(dev_mode == DEV_STANDBY){
-		if(pDrv2605Ldata->dev_mode != DEV_STANDBY){
-			pDrv2605Ldata->dev_mode = DEV_STANDBY;
-			drv2605L_reg_write(pDrv2605Ldata, MODE_REG, MODE_STANDBY);
-			schedule_timeout_interruptible(msecs_to_jiffies(WAKE_STANDBY_DELAY));
+	error = regmap_write(haptics->regmap, DRV260X_OD_CLAMP_VOLT,
+			     haptics->overdrive_voltage);
+	if (error) {
+		dev_err(&haptics->client->dev,
+			"Failed to write DRV260X_OD_CLAMP_VOLT register: %d\n",
+			error);
+		return error;
+	}
+
+	switch (haptics->mode) {
+	case DRV260X_LRA_MODE:
+		error = regmap_register_patch(haptics->regmap,
+					      drv260x_lra_cal_regs,
+					      ARRAY_SIZE(drv260x_lra_cal_regs));
+		if (error) {
+			dev_err(&haptics->client->dev,
+				"Failed to write LRA calibration registers: %d\n",
+				error);
+			return error;
 		}
-		pDrv2605Ldata->work_mode = WORK_IDLE;
-	}else if(dev_mode == DEV_READY){
-		if((work_mode != pDrv2605Ldata->work_mode)
-			||(dev_mode != pDrv2605Ldata->dev_mode)){
-			pDrv2605Ldata->work_mode = work_mode;
-			pDrv2605Ldata->dev_mode = dev_mode;
-			if((pDrv2605Ldata->work_mode == WORK_VIBRATOR)
-				||(pDrv2605Ldata->work_mode == WORK_PATTERN_RTP_ON)
-				||(pDrv2605Ldata->work_mode == WORK_SEQ_RTP_ON)
-				||(pDrv2605Ldata->work_mode == WORK_RTP)){
-					drv2605L_reg_write(pDrv2605Ldata, MODE_REG, MODE_REAL_TIME_PLAYBACK);
-				//printk(KERN_ERR"%s set to RTP mode\n", __FUNCTION__);
-			}else if(pDrv2605Ldata->work_mode == WORK_AUDIO2HAPTIC){
-				drv2605L_reg_write(pDrv2605Ldata, MODE_REG, MODE_AUDIOHAPTIC);
-			}else if(pDrv2605Ldata->work_mode == WORK_CALIBRATION){
-				drv2605L_reg_write(pDrv2605Ldata, MODE_REG, AUTO_CALIBRATION);
-			}else{
-				drv2605L_reg_write(pDrv2605Ldata, MODE_REG, MODE_INTERNAL_TRIGGER);
-				schedule_timeout_interruptible(msecs_to_jiffies(STANDBY_WAKE_DELAY));
-			}
+
+		break;
+
+	case DRV260X_ERM_MODE:
+		error = regmap_register_patch(haptics->regmap,
+					      drv260x_erm_cal_regs,
+					      ARRAY_SIZE(drv260x_erm_cal_regs));
+		if (error) {
+			dev_err(&haptics->client->dev,
+				"Failed to write ERM calibration registers: %d\n",
+				error);
+			return error;
 		}
-	}
-}
 
-static void setAudioHapticsEnabled(struct drv2605L_data *pDrv2605Ldata, int enable)
-{
-    if (enable)
-    {
-		if(pDrv2605Ldata->work_mode != WORK_AUDIO2HAPTIC){
-			pDrv2605Ldata->vibrator_is_playing = YES;
-			drv2605L_change_mode(pDrv2605Ldata, WORK_IDLE, DEV_READY);
-
-			drv2605L_set_bits(pDrv2605Ldata, 
-					Control1_REG, 
-					Control1_REG_AC_COUPLE_MASK, 
-					AC_COUPLE_ENABLED );
-					
-			drv2605L_set_bits(pDrv2605Ldata, 
-					Control3_REG, 
-					Control3_REG_PWMANALOG_MASK, 
-					INPUT_ANALOG);	
-
-			drv2605L_change_mode(pDrv2605Ldata, WORK_AUDIO2HAPTIC, DEV_READY);
-			switch_set_state(&pDrv2605Ldata->sw_dev, SW_STATE_AUDIO2HAPTIC);
+		error = regmap_update_bits(haptics->regmap, DRV260X_LIB_SEL,
+					   DRV260X_LIB_SEL_MASK,
+					   haptics->library);
+		if (error) {
+			dev_err(&haptics->client->dev,
+				"Failed to write DRV260X_LIB_SEL register: %d\n",
+				error);
+			return error;
 		}
-    } else {
-        // Chip needs to be brought out of standby to change the registers
-		if(pDrv2605Ldata->work_mode == WORK_AUDIO2HAPTIC){
-			pDrv2605Ldata->vibrator_is_playing = NO;
-			drv2605L_change_mode(pDrv2605Ldata, WORK_IDLE, DEV_READY);
-						
-			drv2605L_set_bits(pDrv2605Ldata, 
-					Control1_REG, 
-					Control1_REG_AC_COUPLE_MASK, 
-					AC_COUPLE_DISABLED );
-					
-			drv2605L_set_bits(pDrv2605Ldata, 
-					Control3_REG, 
-					Control3_REG_PWMANALOG_MASK, 
-					INPUT_PWM);	
-					
-			switch_set_state(&pDrv2605Ldata->sw_dev, SW_STATE_IDLE);		
-			drv2605L_change_mode(pDrv2605Ldata, WORK_IDLE, DEV_STANDBY); // Disable audio-to-haptics
+
+		break;
+
+	default:
+		error = regmap_register_patch(
+			haptics->regmap, drv260x_lra_init_regs,
+			ARRAY_SIZE(drv260x_lra_init_regs));
+		if (error) {
+			dev_err(&haptics->client->dev,
+				"Failed to write LRA init registers: %d\n",
+				error);
+			return error;
 		}
-    }
-}
 
-static void play_effect(struct drv2605L_data *pDrv2605Ldata)
-{
-	switch_set_state(&pDrv2605Ldata->sw_dev, SW_STATE_SEQUENCE_PLAYBACK);
-	drv2605L_change_mode(pDrv2605Ldata, WORK_SEQ_PLAYBACK, DEV_READY);
-    drv2605L_set_waveform_sequence(pDrv2605Ldata, pDrv2605Ldata->sequence, WAVEFORM_SEQUENCER_MAX);
-	pDrv2605Ldata->vibrator_is_playing = YES;
-    drv2605L_set_go_bit(pDrv2605Ldata, GO);
-
-    while((drv2605L_reg_read(pDrv2605Ldata, GO_REG) == GO) && (pDrv2605Ldata->should_stop == NO)){
-        schedule_timeout_interruptible(msecs_to_jiffies(GO_BIT_POLL_INTERVAL));
-	}
-	
-	if(pDrv2605Ldata->should_stop == YES){
-		drv2605L_set_go_bit(pDrv2605Ldata, STOP);
-	}
-  
-    if (pDrv2605Ldata->audio_haptics_enabled){
-        setAudioHapticsEnabled(pDrv2605Ldata, YES);
-    } else {
-        drv2605L_change_mode(pDrv2605Ldata, WORK_IDLE, DEV_STANDBY);
-		switch_set_state(&pDrv2605Ldata->sw_dev, SW_STATE_IDLE);		
-		pDrv2605Ldata->vibrator_is_playing = NO;
-		wake_unlock(&pDrv2605Ldata->wklock);
-    }
-}
-
-static void play_Pattern_RTP(struct drv2605L_data *pDrv2605Ldata)
-{
-	if(pDrv2605Ldata->work_mode == WORK_PATTERN_RTP_ON){
-		drv2605L_change_mode(pDrv2605Ldata, WORK_PATTERN_RTP_OFF, DEV_READY);
-		if(pDrv2605Ldata->repeat_times == 0){
-			drv2605L_change_mode(pDrv2605Ldata, WORK_IDLE, DEV_STANDBY);
-			pDrv2605Ldata->vibrator_is_playing = NO;
-			switch_set_state(&pDrv2605Ldata->sw_dev, SW_STATE_IDLE);	
-			wake_unlock(&pDrv2605Ldata->wklock);
-		}else{
-			hrtimer_start(&pDrv2605Ldata->timer, ns_to_ktime((u64)pDrv2605Ldata->silience_time * NSEC_PER_MSEC), HRTIMER_MODE_REL);
+		error = regmap_update_bits(haptics->regmap, DRV260X_LIB_SEL,
+					   DRV260X_LIB_SEL_MASK,
+					   haptics->library);
+		if (error) {
+			dev_err(&haptics->client->dev,
+				"Failed to write DRV260X_LIB_SEL register: %d\n",
+				error);
+			return error;
 		}
-	}else if(pDrv2605Ldata->work_mode == WORK_PATTERN_RTP_OFF){
-		pDrv2605Ldata->repeat_times--;
-		drv2605L_change_mode(pDrv2605Ldata, WORK_PATTERN_RTP_ON, DEV_READY);
-		hrtimer_start(&pDrv2605Ldata->timer, ns_to_ktime((u64)pDrv2605Ldata->vibration_time * NSEC_PER_MSEC), HRTIMER_MODE_REL);
+
+		/* No need to set GO bit here */
+		return 0;
 	}
-}
 
-static void play_Seq_RTP(struct drv2605L_data *pDrv2605Ldata)
-{
-	if(pDrv2605Ldata->RTPSeq.RTPindex < pDrv2605Ldata->RTPSeq.RTPCounts){
-		int RTPTime = pDrv2605Ldata->RTPSeq.RTPData[pDrv2605Ldata->RTPSeq.RTPindex] >> 8;
-		int RTPVal = pDrv2605Ldata->RTPSeq.RTPData[pDrv2605Ldata->RTPSeq.RTPindex] & 0x00ff ;
-			
-		pDrv2605Ldata->vibrator_is_playing = YES;
-		pDrv2605Ldata->RTPSeq.RTPindex++;
-		drv2605L_change_mode(pDrv2605Ldata, WORK_SEQ_RTP_ON, DEV_READY);
-		drv2605L_set_rtp_val(pDrv2605Ldata,  RTPVal);
-							
-		hrtimer_start(&pDrv2605Ldata->timer, ns_to_ktime((u64)RTPTime * NSEC_PER_MSEC), HRTIMER_MODE_REL);
-	}else{
-		drv2605L_change_mode(pDrv2605Ldata, WORK_IDLE, DEV_STANDBY);
-		pDrv2605Ldata->vibrator_is_playing = NO;
-		switch_set_state(&pDrv2605Ldata->sw_dev, SW_STATE_IDLE);	
-		wake_unlock(&pDrv2605Ldata->wklock);
+	error = regmap_write(haptics->regmap, DRV260X_GO, DRV260X_GO_BIT);
+	if (error) {
+		dev_err(&haptics->client->dev,
+			"Failed to write GO register: %d\n", error);
+		return error;
 	}
-}
 
-static void vibrator_off(struct drv2605L_data *pDrv2605Ldata)
-{
-    if (pDrv2605Ldata->vibrator_is_playing) {
-		if(pDrv2605Ldata->audio_haptics_enabled == YES){
-			setAudioHapticsEnabled(pDrv2605Ldata, YES);
-		}else{
-			pDrv2605Ldata->vibrator_is_playing = NO;
-			drv2605L_set_go_bit(pDrv2605Ldata, STOP);
-			drv2605L_change_mode(pDrv2605Ldata, WORK_IDLE, DEV_STANDBY);
-			switch_set_state(&pDrv2605Ldata->sw_dev, SW_STATE_IDLE);
-
-			wake_unlock(&pDrv2605Ldata->wklock);
-            #if 0
-            printk(KERN_ERR" reg 0x00=%x \n", drv2605L_reg_read(pDrv2605Ldata, 0x00));
-            printk(KERN_ERR" reg 0x01=%x \n", drv2605L_reg_read(pDrv2605Ldata, 0x01));
-            printk(KERN_ERR" reg 0x02=%x \n", drv2605L_reg_read(pDrv2605Ldata, 0x02));
-            printk(KERN_ERR" reg 0x03=%x \n", drv2605L_reg_read(pDrv2605Ldata, 0x03));
-            printk(KERN_ERR" reg 0x04=%x \n", drv2605L_reg_read(pDrv2605Ldata, 0x04));
-            printk(KERN_ERR" reg 0x05=%x \n", drv2605L_reg_read(pDrv2605Ldata, 0x05));
-            printk(KERN_ERR" reg 0x06=%x \n", drv2605L_reg_read(pDrv2605Ldata, 0x06));
-            printk(KERN_ERR" reg 0x07=%x \n", drv2605L_reg_read(pDrv2605Ldata, 0x07));
-            printk(KERN_ERR" reg 0x08=%x \n", drv2605L_reg_read(pDrv2605Ldata, 0x08));
-            printk(KERN_ERR" reg 0x09=%x \n", drv2605L_reg_read(pDrv2605Ldata, 0x09));
-            printk(KERN_ERR" reg 0x0A=%x \n", drv2605L_reg_read(pDrv2605Ldata, 0x0A));
-            printk(KERN_ERR" reg 0x0B=%x \n", drv2605L_reg_read(pDrv2605Ldata, 0x0B));
-            printk(KERN_ERR" reg 0x0C=%x \n", drv2605L_reg_read(pDrv2605Ldata, 0x0C));
-            printk(KERN_ERR" reg 0x0D=%x \n", drv2605L_reg_read(pDrv2605Ldata, 0x0D));
-            printk(KERN_ERR" reg 0x0E=%x \n", drv2605L_reg_read(pDrv2605Ldata, 0x0E));
-            printk(KERN_ERR" reg 0x0F=%x \n", drv2605L_reg_read(pDrv2605Ldata, 0x0F));
-            printk(KERN_ERR" reg 0x10=%x \n", drv2605L_reg_read(pDrv2605Ldata, 0x10));
-            printk(KERN_ERR" reg 0x11=%x \n", drv2605L_reg_read(pDrv2605Ldata, 0x11));
-            printk(KERN_ERR" reg 0x12=%x \n", drv2605L_reg_read(pDrv2605Ldata, 0x12));
-            printk(KERN_ERR" reg 0x13=%x \n", drv2605L_reg_read(pDrv2605Ldata, 0x13));
-            printk(KERN_ERR" reg 0x14=%x \n", drv2605L_reg_read(pDrv2605Ldata, 0x14));
-            printk(KERN_ERR" reg 0x15=%x \n", drv2605L_reg_read(pDrv2605Ldata, 0x15));
-            printk(KERN_ERR" reg 0x16=%x \n", drv2605L_reg_read(pDrv2605Ldata, 0x16));
-            printk(KERN_ERR" reg 0x17=%x \n", drv2605L_reg_read(pDrv2605Ldata, 0x17));
-            printk(KERN_ERR" reg 0x18=%x \n", drv2605L_reg_read(pDrv2605Ldata, 0x18));
-            printk(KERN_ERR" reg 0x19=%x \n", drv2605L_reg_read(pDrv2605Ldata, 0x19));
-            printk(KERN_ERR" reg 0x1A=%x \n", drv2605L_reg_read(pDrv2605Ldata, 0x1A));
-            printk(KERN_ERR" reg 0x1B=%x \n", drv2605L_reg_read(pDrv2605Ldata, 0x1B));
-            printk(KERN_ERR" reg 0x1C=%x \n", drv2605L_reg_read(pDrv2605Ldata, 0x1C));
-            printk(KERN_ERR" reg 0x1D=%x \n", drv2605L_reg_read(pDrv2605Ldata, 0x1D));
-            printk(KERN_ERR" reg 0x1E=%x \n", drv2605L_reg_read(pDrv2605Ldata, 0x1E));
-            printk(KERN_ERR" reg 0x1F=%x \n", drv2605L_reg_read(pDrv2605Ldata, 0x1F));
-            printk(KERN_ERR" reg 0x20=%x \n", drv2605L_reg_read(pDrv2605Ldata, 0x20));
-            printk(KERN_ERR" reg 0x21=%x \n", drv2605L_reg_read(pDrv2605Ldata, 0x21));
-            printk(KERN_ERR" reg 0x22=%x \n", drv2605L_reg_read(pDrv2605Ldata, 0x22));
-            #endif
+	do {
+		error = regmap_read(haptics->regmap, DRV260X_GO, &cal_buf);
+		if (error) {
+			dev_err(&haptics->client->dev,
+				"Failed to read GO register: %d\n", error);
+			return error;
 		}
-    }
-}
+	} while (cal_buf == DRV260X_GO_BIT);
 
-static void drv2605L_stop(struct drv2605L_data *pDrv2605Ldata)
-{
-	if(pDrv2605Ldata->vibrator_is_playing){
-		if(pDrv2605Ldata->work_mode == WORK_AUDIO2HAPTIC){
-			setAudioHapticsEnabled(pDrv2605Ldata, NO);		
-		}else if((pDrv2605Ldata->work_mode == WORK_VIBRATOR)
-				||(pDrv2605Ldata->work_mode == WORK_PATTERN_RTP_ON)
-				||(pDrv2605Ldata->work_mode == WORK_PATTERN_RTP_OFF)
-				||(pDrv2605Ldata->work_mode == WORK_SEQ_RTP_ON)
-				||(pDrv2605Ldata->work_mode == WORK_SEQ_RTP_OFF)
-				||(pDrv2605Ldata->work_mode == WORK_RTP)){
-			vibrator_off(pDrv2605Ldata);
-		}else if(pDrv2605Ldata->work_mode == WORK_SEQ_PLAYBACK){
-		}else{
-			printk(KERN_ERR"%s, err mode=%d \n", __FUNCTION__, pDrv2605Ldata->work_mode);
-		}
-	}
-}
-
-static int vibrator_get_time(struct timed_output_dev *dev)
-{
-	struct drv2605L_data *pDrv2605Ldata = container_of(dev, struct drv2605L_data, to_dev);
-
-    if (hrtimer_active(&pDrv2605Ldata->timer)) {
-        ktime_t r = hrtimer_get_remaining(&pDrv2605Ldata->timer);
-        return ktime_to_ms(r);
-    }
-
-    return 0;
-}
-#define SIN_C_MASK
-#define ASIN_C_MASK
-#define DELAY_MASK
-
-#if 0
-static int vibrator_pattern_enable(struct drv2605L_data *pDrv2605Ldata, unsigned int duty, unsigned int SIN_C, unsigned int delay_steps, unsigned int ANTI_SIN_C)
-{
-	int err = 0;
-	unsigned int sin_usec, anti_sin_usec, T_time, tdelay_usec;
-	struct drv2605_platform_data *pDrv2605Platdata = &pDrv2605Ldata->PlatData;
-	T_time = 1000000/pDrv2605Platdata->actuator.LRAFreq;
-	sin_usec = SIN_C * T_time;
-	anti_sin_usec = ANTI_SIN_C * T_time;
-	/*one delay_step meam half cycle*/
-	tdelay_usec = delay_steps*T_time/2;
-	
-	printk(KERN_DEBUG"%s: sin_usec(%d), delay (%d), anti_sin__usec(%d)\n", __func__, sin_usec, tdelay_usec, anti_sin_usec);
-	
-	drv2605L_set_rtp_val(pDrv2605Ldata, 0x7f);
-	drv2605L_change_mode(pDrv2605Ldata, WORK_RTP, DEV_READY);
-	//mdelay(sin_usec/1000); // output duration : (1 / 150) * 3 = 20ms
-	udelay(sin_usec);
-	
-	drv2605L_change_mode(pDrv2605Ldata, WORK_IDLE, DEV_READY);
-	udelay(tdelay_usec);
-	
-	drv2605L_set_rtp_val(pDrv2605Ldata, 0x81);
-	drv2605L_change_mode(pDrv2605Ldata, WORK_RTP, DEV_READY);
-	//mdelay(anti_sin__usec/1000); // output duration : (1 / 150)  = 6.667ms
-	udelay(anti_sin_usec);
-	
-	drv2605L_change_mode(pDrv2605Ldata, WORK_IDLE, DEV_READY);
-	
-	return err;
-}
-#endif
-static void vibrator_pattern_enable_peek2(struct drv2605L_data *pDrv2605Ldata)
-{	
-	int ready_status,retry_cnt=0;
-	//printk(KERN_ERR"%s \n", __func__);
-	//drv2605L_reg_write(pDrv2605Ldata,0x01,0x85);
-	drv2605L_reg_write(pDrv2605Ldata,0x01,0x80);
-	for (retry_cnt = 0; retry_cnt < 50; retry_cnt++) {
-	    mdelay(1);
-	    ready_status=drv2605L_reg_read(pDrv2605Ldata, 0x01);
-	    if (ready_status != 0x40)
-	        printk(KERN_ERR" reg 0x01=%x, retry \n", ready_status);
-	    else
-	        break;
-	}
-
-	drv2605L_reg_write(pDrv2605Ldata,0x01,0x05);
-	drv2605L_reg_write(pDrv2605Ldata,0x1a,0x80);
-	drv2605L_reg_write(pDrv2605Ldata,0x17,0x55); //set 1/3 max voltage
-	drv2605L_reg_write(pDrv2605Ldata,0x1d,0x81);
-	//pulse1 +  12ms
-	drv2605L_reg_write(pDrv2605Ldata,0x20,0x31);
-	drv2605L_reg_write(pDrv2605Ldata,0x02,0x7f);
-	mdelay(12);
-	//pulse2 +  10ms
-	drv2605L_reg_write(pDrv2605Ldata,0x02,0x81);
-	mdelay(10);
-	//pulse3 +  7ms
-	drv2605L_reg_write(pDrv2605Ldata,0x17,0x2A); //set 1/6 max voltage
-	drv2605L_reg_write(pDrv2605Ldata,0x02,0x7f);
-	mdelay(7);
-	//pulse4 +  7ms
-	drv2605L_reg_write(pDrv2605Ldata,0x17,0x15); //set 1/12  max voltage
-	drv2605L_reg_write(pDrv2605Ldata,0x02,0x81);
-	mdelay(7);
-	//pulse5 +  5ms
-	drv2605L_reg_write(pDrv2605Ldata,0x17,0x02); //set 1 % max voltage
-	drv2605L_reg_write(pDrv2605Ldata,0x02,0x81);
-	mdelay(5);
-	//STOP
-	drv2605L_reg_write(pDrv2605Ldata,0x02,0x00);
-
-	//restore reg value
-	drv2605L_reg_write(pDrv2605Ldata,0x01,0x40);
-	drv2605L_reg_write(pDrv2605Ldata,0x17,0x3E);
-	drv2605L_reg_write(pDrv2605Ldata,0x1a,0xA8);
-	drv2605L_reg_write(pDrv2605Ldata,0x1d,0x80);
-	drv2605L_reg_write(pDrv2605Ldata,0x20,0x43);
-	//drv2605L_reg_write(pDrv2605Ldata,0x21,0xC9);
-}
-static void vibrator_pattern_enable_peek(struct drv2605L_data *pDrv2605Ldata)
-{	
-	int ready_status,retry_cnt=0;
-    	//printk(KERN_ERR"%s \n", __func__);
-                #if 0
- 	drv2605L_reg_write(pDrv2605Ldata, 0x1a, 0x80);
-	drv2605L_reg_write(pDrv2605Ldata,0x1d,0x81);
-	drv2605L_reg_write(pDrv2605Ldata,0x20,0xff);
-	drv2605L_reg_write(pDrv2605Ldata,0x17,0xff);
-	drv2605L_reg_write(pDrv2605Ldata,0x01,0x05);
-	//pulse1 +  2.5ms
- 	drv2605L_reg_write(pDrv2605Ldata,0x02,0x7f);
-	mdelay(2);
- 	udelay(500);
-	//pulse2 -  2.2ms
-	drv2605L_reg_write(pDrv2605Ldata,0x02,0x81);
-	mdelay(2);
- 	udelay(200);
-	//pulse3 +  2.7ms
-	drv2605L_reg_write(pDrv2605Ldata,0x02,0x7f);
-	mdelay(2);
- 	udelay(700);
-	//pulse4 +  1.0ms
-	drv2605L_reg_write(pDrv2605Ldata,0x02,0x81);
- 	udelay(1000);
-	//pulse5 +  2.0ms
-	drv2605L_reg_write(pDrv2605Ldata,0x02,0x7f);
-	mdelay(2);
-	//pulse6 +  2.2ms
-	drv2605L_reg_write(pDrv2605Ldata,0x02,0x81);
-	mdelay(2);
- 	udelay(200);
-	//pulse7 +  1.6ms
-	drv2605L_reg_write(pDrv2605Ldata,0x02,0x7f);
-	mdelay(1);
- 	udelay(600);
-	//STOP
-	drv2605L_reg_write(pDrv2605Ldata,0x02,0x00);
-
-            #endif
-	//drv2605L_reg_write(pDrv2605Ldata,0x01,0x85);
-	drv2605L_reg_write(pDrv2605Ldata,0x01,0x80);
-	for (retry_cnt = 0; retry_cnt < 50; retry_cnt++) {
-	    mdelay(1);
-	    ready_status=drv2605L_reg_read(pDrv2605Ldata, 0x01);
-	    if (ready_status != 0x40)
-	        printk(KERN_ERR" reg 0x01=%x, retry \n", ready_status);
-	    else
-	        break;
-	}
-
-	drv2605L_reg_write(pDrv2605Ldata,0x01,0x05);
-	drv2605L_reg_write(pDrv2605Ldata,0x1a,0x80);
-	drv2605L_reg_write(pDrv2605Ldata,0x17,0xff);
-	drv2605L_reg_write(pDrv2605Ldata,0x1d,0x81);
-	//pulse1 +  12ms
-	drv2605L_reg_write(pDrv2605Ldata,0x20,0x31);
-	drv2605L_reg_write(pDrv2605Ldata,0x02,0x7f);
-	mdelay(12);
-	//pulse2 +  10ms
-	drv2605L_reg_write(pDrv2605Ldata,0x02,0x81);
-	mdelay(10);
-	//pulse3 +  7ms
-	drv2605L_reg_write(pDrv2605Ldata,0x17,0x7f);
-	drv2605L_reg_write(pDrv2605Ldata,0x02,0x7f);
-	mdelay(7);
-	//pulse4 +  7ms
-	drv2605L_reg_write(pDrv2605Ldata,0x17,0x3f);
-	drv2605L_reg_write(pDrv2605Ldata,0x02,0x81);
-	mdelay(7);
-	//pulse5 +  5ms
-	drv2605L_reg_write(pDrv2605Ldata,0x17,0x08);
-	drv2605L_reg_write(pDrv2605Ldata,0x02,0x81);
-	mdelay(5);
-	//STOP
-	drv2605L_reg_write(pDrv2605Ldata,0x02,0x00);
-
-	//restore reg value
-	drv2605L_reg_write(pDrv2605Ldata,0x01,0x40);
-	drv2605L_reg_write(pDrv2605Ldata,0x17,0x3E);
-	drv2605L_reg_write(pDrv2605Ldata,0x1a,0xA8);
-	drv2605L_reg_write(pDrv2605Ldata,0x1d,0x80);
-	drv2605L_reg_write(pDrv2605Ldata,0x20,0x43);
-	//drv2605L_reg_write(pDrv2605Ldata,0x21,0xC9);
-}
-
-static void vibrator_set_normal_vibration_B2N(struct drv2605L_data *pDrv2605Ldata)
-{
-	printk("into vibrator_set_normal_vibration_B2N\n");
-	drv2605L_reg_write(pDrv2605Ldata,0x1D,0x81);
-	drv2605L_reg_write(pDrv2605Ldata,0x20,0x31);
-	drv2605L_reg_write(pDrv2605Ldata,0x17,0x5C);
-}
-
-static void vibrator_enable( struct timed_output_dev *dev, int value)
-{
-	struct drv2605L_data *pDrv2605Ldata = container_of(dev, struct drv2605L_data, to_dev);
-
-	pDrv2605Ldata->should_stop = YES;	
-	hrtimer_cancel(&pDrv2605Ldata->timer);
-	cancel_work_sync(&pDrv2605Ldata->vibrator_work);
-
-	mutex_lock(&pDrv2605Ldata->lock);
-	
-	drv2605L_stop(pDrv2605Ldata);
-
-	if (value > 0) {
-
-		if (value ==16){
-		    drv2605L_reg_write(pDrv2605Ldata,0x17,0xDF);
-		    value=6;
-		}
-		//printk(KERN_ERR" reg 0x17=%x \n", drv2605L_reg_read(pDrv2605Ldata, 0x17));
-		if(pDrv2605Ldata->audio_haptics_enabled == NO){
-			wake_lock(&pDrv2605Ldata->wklock);
-		}
-#if 1	/*use RTP vibrator*/
-		drv2605L_set_rtp_val(pDrv2605Ldata, 0x7f);
-		//drv2605L_reg_write(pDrv2605Ldata,0x17,0x3E);  // modify OD_CLAMP to control voltage
-		drv2605L_reg_write(pDrv2605Ldata,0x1b,0x96); //control output Waveform frequency
-		drv2605L_change_mode(pDrv2605Ldata, WORK_RTP, DEV_READY);
-        //now, device in ready mode set to RTP mode
-
-		vibrator_set_normal_vibration_B2N(pDrv2605Ldata);
-#else
-		drv2605L_change_mode(pDrv2605Ldata, WORK_VIBRATOR, DEV_READY);
-#endif
-		pDrv2605Ldata->vibrator_is_playing = YES;
-		switch_set_state(&pDrv2605Ldata->sw_dev, SW_STATE_RTP_PLAYBACK);			
-
-		value = (value>MAX_TIMEOUT)?MAX_TIMEOUT:value;
-        hrtimer_start(&pDrv2605Ldata->timer, ns_to_ktime((u64)value * NSEC_PER_MSEC), HRTIMER_MODE_REL);
-    }
-
-	mutex_unlock(&pDrv2605Ldata->lock);
-}
-
-static void fih_vibrator_enable( struct timed_output_dev *dev, int value)
-{
-	//int wave_num;
-	//unsigned int SIN_C, delay_steps, ANTI_SIN_C, duty=0;
-	//printk(KERN_ERR"%s,value=%d \n", __FUNCTION__,value);
-
-	if(value>=0)
-		vibrator_enable(dev, value);
-        #if 0
-	if(value<0){
-		wave_num = -1*value;
-		if(wave_num==999)
-		{
-			vibrator_pattern_enable_peek(pDrv2605Ldata);
-		}
-		else
-		{
-			SIN_C = (wave_num/100)%10;
-			delay_steps = (wave_num/10)%10;
-			ANTI_SIN_C = (wave_num)%10;
-			printk(KERN_DEBUG"%s: wave_num(%d:%d:%d:%d)\n", __func__, duty, SIN_C, delay_steps, ANTI_SIN_C);
-			if(SIN_C > 0)
-				vibrator_pattern_enable(pDrv2605Ldata, duty, SIN_C, delay_steps, ANTI_SIN_C);
-			else
-				printk(KERN_ERR"%s: wrong pattern enable(%d:%d:%d:%d)\n", __func__, duty, SIN_C, delay_steps, ANTI_SIN_C);
-		}
-	}
-        #endif
-}
-static enum hrtimer_restart vibrator_timer_func(struct hrtimer *timer)
-{
-	struct drv2605L_data *pDrv2605Ldata = container_of(timer, struct drv2605L_data, timer);
-
-    schedule_work(&pDrv2605Ldata->vibrator_work);
-	
-    return HRTIMER_NORESTART;
-}
-
-static void vibrator_work_routine(struct work_struct *work)
-{
-	struct drv2605L_data *pDrv2605Ldata = container_of(work, struct drv2605L_data, vibrator_work);
-	//printk(KERN_ERR"%s ,work_mode = %x \n", __func__,pDrv2605Ldata->work_mode);
-	mutex_lock(&pDrv2605Ldata->lock);
-	if((pDrv2605Ldata->work_mode == WORK_VIBRATOR)
-		||(pDrv2605Ldata->work_mode == WORK_RTP)){
-	       //printk(KERN_ERR"%s call vibrator_off\n", __func__);
-		vibrator_off(pDrv2605Ldata);
-	}else if(pDrv2605Ldata->work_mode == WORK_SEQ_PLAYBACK){
-		play_effect(pDrv2605Ldata);
-	}else if((pDrv2605Ldata->work_mode == WORK_PATTERN_RTP_ON)||(pDrv2605Ldata->work_mode == WORK_PATTERN_RTP_OFF)){
-		play_Pattern_RTP(pDrv2605Ldata);
-	}else if((pDrv2605Ldata->work_mode == WORK_SEQ_RTP_ON)||(pDrv2605Ldata->work_mode == WORK_SEQ_RTP_OFF)){
-		play_Seq_RTP(pDrv2605Ldata);
-	}
-	mutex_unlock(&pDrv2605Ldata->lock);
-}
-
-static void vibrator_pattern_work_routine(struct work_struct *work)
-{
-	struct drv2605L_data *pDrv2605Ldata = container_of(work, struct drv2605L_data, vibrator_pattern_work);
-	int pattern_value=0;
-	pattern_value = vibrator_get_pattern_value();
-	//printk("vibrator_pattern_work_routine pattern_value = %d \n",pattern_value);
-	mutex_lock(&pDrv2605Ldata->lock);
-	if(pattern_value==1)
-	{
-		vibrator_pattern_enable_peek2(pDrv2605Ldata);
-	}
-	else if(pattern_value==999)
-	{
-		vibrator_pattern_enable_peek(pDrv2605Ldata);
-	}
-	mutex_unlock(&pDrv2605Ldata->lock);
-	//printk("vibrator_pattern_work_routine pattern_value Done\n");
-}
-
-static int dev2605L_open (struct inode * i_node, struct file * filp)
-{
-	if(pDRV2605Ldata == NULL){
-		return -ENODEV;
-	}
-
-	filp->private_data = pDRV2605Ldata;
 	return 0;
 }
 
-static ssize_t dev2605L_read(struct file* filp, char* buff, size_t length, loff_t* offset)
-{
-	struct drv2605L_data *pDrv2605Ldata = (struct drv2605L_data *)filp->private_data;
-	int ret = 0;
-
-	if(pDrv2605Ldata->ReadLen > 0){
-		ret = copy_to_user(buff, pDrv2605Ldata->ReadBuff, pDrv2605Ldata->ReadLen);
-		if (ret != 0){
-			printk(KERN_ERR"%s, copy_to_user err=%d \n", __FUNCTION__, ret);
-		}else{
-			ret = pDrv2605Ldata->ReadLen;
-		}
-		pDrv2605Ldata->ReadLen = 0;
-	}
-	
-    return ret;
-}
-
-static bool isforDebug(int cmd){
-	return ((cmd == HAPTIC_CMDID_REG_WRITE)
-		||(cmd == HAPTIC_CMDID_REG_READ)
-		||(cmd == HAPTIC_CMDID_REG_SETBIT));
-}
-
-static ssize_t dev2605L_write(struct file* filp, const char* buff, size_t len, loff_t* off)
-{
-	struct drv2605L_data *pDrv2605Ldata = (struct drv2605L_data *)filp->private_data;
-	
-	if(isforDebug(buff[0])){
-	}else{
-		pDrv2605Ldata->should_stop = YES;	
-		hrtimer_cancel(&pDrv2605Ldata->timer);
-		cancel_work_sync(&pDrv2605Ldata->vibrator_work);
-	}
-	
-    mutex_lock(&pDrv2605Ldata->lock);
-	
-	if(isforDebug(buff[0])){
-	}else{
-		drv2605L_stop(pDrv2605Ldata);
-	}
-	
-    switch(buff[0])
-    {
-        case HAPTIC_CMDID_PLAY_SINGLE_EFFECT:
-        case HAPTIC_CMDID_PLAY_EFFECT_SEQUENCE:
-		{	
-            memset(&pDrv2605Ldata->sequence, 0, WAVEFORM_SEQUENCER_MAX);
-            if (!copy_from_user(&pDrv2605Ldata->sequence, &buff[1], len - 1))
-            {
-				if(pDrv2605Ldata->audio_haptics_enabled == NO){
-					wake_lock(&pDrv2605Ldata->wklock);
-				}
-				pDrv2605Ldata->should_stop = NO;
-				drv2605L_change_mode(pDrv2605Ldata, WORK_SEQ_PLAYBACK, DEV_IDLE);
-                schedule_work(&pDrv2605Ldata->vibrator_work);
-            }
-            break;
-        }
-        case HAPTIC_CMDID_PLAY_TIMED_EFFECT:
-        {	
-            unsigned int value = 0;
-            value = buff[2];
-            value <<= 8;
-            value |= buff[1];
-		
-            if (value > 0)
-            {
-				if(pDrv2605Ldata->audio_haptics_enabled == NO){			
-					wake_lock(&pDrv2605Ldata->wklock);
-				}
-				switch_set_state(&pDrv2605Ldata->sw_dev, SW_STATE_RTP_PLAYBACK);
-				pDrv2605Ldata->vibrator_is_playing = YES;
-  				value = (value > MAX_TIMEOUT)?MAX_TIMEOUT:value;
-				drv2605L_change_mode(pDrv2605Ldata, WORK_RTP, DEV_READY);
-				
-				hrtimer_start(&pDrv2605Ldata->timer, ns_to_ktime((u64)value * NSEC_PER_MSEC), HRTIMER_MODE_REL);
-            }
-            break;
-        }
-
-       case HAPTIC_CMDID_PATTERN_RTP:
-        {
-			unsigned char strength = 0;
-
-			pDrv2605Ldata->vibration_time = (int)((((int)buff[2])<<8) | (int)buff[1]);
-			pDrv2605Ldata->silience_time = (int)((((int)buff[4])<<8) | (int)buff[3]);
-			strength = buff[5];
-			pDrv2605Ldata->repeat_times = buff[6];
-			
-            if(pDrv2605Ldata->vibration_time > 0){
-				if(pDrv2605Ldata->audio_haptics_enabled == NO){
-					wake_lock(&pDrv2605Ldata->wklock);			
-				}
-				switch_set_state(&pDrv2605Ldata->sw_dev, SW_STATE_RTP_PLAYBACK);
-				pDrv2605Ldata->vibrator_is_playing = YES;
-                if(pDrv2605Ldata->repeat_times > 0)
-					pDrv2605Ldata->repeat_times--;
-                if (pDrv2605Ldata->vibration_time > MAX_TIMEOUT)
-                    pDrv2605Ldata->vibration_time = MAX_TIMEOUT;
-				drv2605L_change_mode(pDrv2605Ldata, WORK_PATTERN_RTP_ON, DEV_READY);
-				drv2605L_set_rtp_val(pDrv2605Ldata, strength);
-				
-                hrtimer_start(&pDrv2605Ldata->timer, ns_to_ktime((u64)pDrv2605Ldata->vibration_time * NSEC_PER_MSEC), HRTIMER_MODE_REL);
-            }
-            break;
-        }		
- 		
-		case HAPTIC_CMDID_RTP_SEQUENCE:
-		{
-            memset(&pDrv2605Ldata->RTPSeq, 0, sizeof(struct RTP_Seq));
-			if(((len-1)%2) == 0){
-				pDrv2605Ldata->RTPSeq.RTPCounts = (len-1)/2;
-				if((pDrv2605Ldata->RTPSeq.RTPCounts <= MAX_RTP_SEQ)&&(pDrv2605Ldata->RTPSeq.RTPCounts>0)){
-					if(copy_from_user(pDrv2605Ldata->RTPSeq.RTPData, &buff[1], pDrv2605Ldata->RTPSeq.RTPCounts*2) != 0){
-						printk(KERN_ERR"%s, rtp_seq copy seq err\n", __FUNCTION__);	
-						break;
-					}
-					
-					if(pDrv2605Ldata->audio_haptics_enabled == NO){
-						wake_lock(&pDrv2605Ldata->wklock);
-					}
-					switch_set_state(&pDrv2605Ldata->sw_dev, SW_STATE_RTP_PLAYBACK);
-					drv2605L_change_mode(pDrv2605Ldata, WORK_SEQ_RTP_OFF, DEV_IDLE);
-					schedule_work(&pDrv2605Ldata->vibrator_work);
-				}else{
-					printk(KERN_ERR"%s, rtp_seq count error,maximum=%d\n", __FUNCTION__,MAX_RTP_SEQ);
-				}
-			}else{
-				printk(KERN_ERR"%s, rtp_seq len error\n", __FUNCTION__);
-			}
-			break;
-		}
-		
-        case HAPTIC_CMDID_STOP:
-        {
-            break;
-        }
-		
-        case HAPTIC_CMDID_AUDIOHAPTIC_ENABLE:
-        {
-			if(pDrv2605Ldata->audio_haptics_enabled == NO){
-				wake_lock(&pDrv2605Ldata->wklock);
-			}
-			pDrv2605Ldata->audio_haptics_enabled = YES;
-			setAudioHapticsEnabled(pDrv2605Ldata, YES);
-            break;
-        }
-		
-        case HAPTIC_CMDID_AUDIOHAPTIC_DISABLE:
-        {
-			if(pDrv2605Ldata->audio_haptics_enabled == YES){
-				pDrv2605Ldata->audio_haptics_enabled = NO;
-				wake_unlock(&pDrv2605Ldata->wklock);	
-			}
-            break;
-        }
-		
-		case HAPTIC_CMDID_REG_READ:
-		{
-			if(len == 2){
-				pDrv2605Ldata->ReadLen = 1;
-				pDrv2605Ldata->ReadBuff[0] = drv2605L_reg_read(pDrv2605Ldata, buff[1]);
-			}else if(len == 3){
-				pDrv2605Ldata->ReadLen = (buff[2]>MAX_READ_BYTES)?MAX_READ_BYTES:buff[2];
-				drv2605L_bulk_read(pDrv2605Ldata, buff[1], pDrv2605Ldata->ReadLen, pDrv2605Ldata->ReadBuff);
-			}else{
-				printk(KERN_ERR"%s, reg_read len error\n", __FUNCTION__);
-			}
-			break;
-		}
-		
-		case HAPTIC_CMDID_REG_WRITE:
-		{
-			if((len-1) == 2){
-				drv2605L_reg_write(pDrv2605Ldata, buff[1], buff[2]);	
-			}else if((len-1)>2){
-				unsigned char *data = (unsigned char *)kzalloc(len-2, GFP_KERNEL);
-				if(data != NULL){
-					if(copy_from_user(data, &buff[2], len-2) != 0){
-						printk(KERN_ERR"%s, reg copy err\n", __FUNCTION__);	
-					}else{
-						drv2605L_bulk_write(pDrv2605Ldata, buff[1], len-2, data);
-					}
-					kfree(data);
-				}
-			}else{
-				printk(KERN_ERR"%s, reg_write len error\n", __FUNCTION__);
-			}
-			break;
-		}
-		
-		case HAPTIC_CMDID_REG_SETBIT:
-		{
-			int i=1;			
-			for(i=1; i< len; ){
-				drv2605L_set_bits(pDrv2605Ldata, buff[i], buff[i+1], buff[i+2]);
-				i += 3;
-			}
-			break;
-		}		
-    default:
-		printk(KERN_ERR"%s, unknown HAPTIC cmd\n", __FUNCTION__);
-      break;
-    }
-
-    mutex_unlock(&pDrv2605Ldata->lock);
-
-    return len;
-}
-
-
-static struct file_operations fops =
-{
-	.open = dev2605L_open,
-    .read = dev2605L_read,
-    .write = dev2605L_write,
-};
-
-#ifdef CONFIG_HAS_EARLYSUSPEND
-void drv2605L_early_suspend(struct early_suspend *h){
-	struct drv2605L_data *pDrv2605Ldata = container_of(h, struct drv2605L_data, early_suspend); 
-
-	pDrv2605Ldata->should_stop = YES;	
-	hrtimer_cancel(&pDrv2605Ldata->timer);
-	cancel_work_sync(&pDrv2605Ldata->vibrator_work);
-	
-	mutex_lock(&pDrv2605Ldata->lock);	
-	
-	drv2605L_stop(pDrv2605Ldata);
-	if(pDrv2605Ldata->audio_haptics_enabled == YES){
-		wake_unlock(&pDrv2605Ldata->wklock);
-	}
-	
-	mutex_unlock(&pDrv2605Ldata->lock);
-    return ;
-}
-
-void drv2605L_late_resume(struct early_suspend *h) {
-	struct drv2605L_data *pDrv2605Ldata = container_of(h, struct drv2605L_data, early_suspend); 
-	
-	mutex_lock(&pDrv2605Ldata->lock);	
-	if(pDrv2605Ldata->audio_haptics_enabled == YES){
-		wake_lock(&pDrv2605Ldata->wklock);
-		setAudioHapticsEnabled(pDrv2605Ldata, YES);
-	}
-	mutex_unlock(&pDrv2605Ldata->lock);
-    return ; 
- }
- #endif
- 
-static int Haptics_init(struct drv2605L_data *pDrv2605Ldata)
-{
-    int reval = -ENOMEM;
-   
-    pDrv2605Ldata->version = MKDEV(0,0);
-    reval = alloc_chrdev_region(&pDrv2605Ldata->version, 0, 1, HAPTICS_DEVICE_NAME);
-    if (reval < 0)
-    {
-        printk(KERN_ALERT"drv2605: error getting major number %d\n", reval);
-        goto fail0;
-    }
-
-    pDrv2605Ldata->class = class_create(THIS_MODULE, HAPTICS_DEVICE_NAME);
-    if (!pDrv2605Ldata->class)
-    {
-        printk(KERN_ALERT"drv2605: error creating class\n");
-        goto fail1;
-    }
-
-    pDrv2605Ldata->device = device_create(pDrv2605Ldata->class, NULL, pDrv2605Ldata->version, NULL, HAPTICS_DEVICE_NAME);
-    if (!pDrv2605Ldata->device)
-    {
-        printk(KERN_ALERT"drv2605: error creating device 2605L\n");
-        goto fail2;
-    }
-
-    cdev_init(&pDrv2605Ldata->cdev, &fops);
-    pDrv2605Ldata->cdev.owner = THIS_MODULE;
-    pDrv2605Ldata->cdev.ops = &fops;
-    reval = cdev_add(&pDrv2605Ldata->cdev, pDrv2605Ldata->version, 1);
-    if (reval)
-    {
-        printk(KERN_ALERT"drv2605: fail to add cdev\n");
-        goto fail3;
-    }
-
-	pDrv2605Ldata->sw_dev.name = "haptics";
-	reval = switch_dev_register(&pDrv2605Ldata->sw_dev);
-	if (reval < 0) {
-		printk(KERN_ALERT"drv2605: fail to register switch\n");
-		goto fail4;
-	}	
-	
-	pDrv2605Ldata->to_dev.name = "vibrator";
-	pDrv2605Ldata->to_dev.get_time = vibrator_get_time;
-	pDrv2605Ldata->to_dev.enable = fih_vibrator_enable;//vibrator_enable;
-
-    if (timed_output_dev_register(&(pDrv2605Ldata->to_dev)) < 0)
-    {
-        printk(KERN_ALERT"drv2605: fail to create timed output dev\n");
-        goto fail3;
-    }
-	if(pDrv2605Ldata->PlatData.support_pattern==true)
-	{
-		int i=0;
-		printk("support_pattern is true create virtual file\n");
-		for (i = 0; i < ARRAY_SIZE(qpnp_hap_attrs); i++)
-		{
-				int rc = sysfs_create_file(&(pDrv2605Ldata->to_dev).dev->kobj,&qpnp_hap_attrs[i].attr);
-				if (rc < 0)
-					pr_err("sysfs creation failed\n");
-		}
-	}
-	
-#ifdef CONFIG_HAS_EARLYSUSPEND
-    pDrv2605Ldata->early_suspend.suspend = drv2605L_early_suspend;
-	pDrv2605Ldata->early_suspend.resume = drv2605L_late_resume;
-	pDrv2605Ldata->early_suspend.level = EARLY_SUSPEND_LEVEL_BLANK_SCREEN - 1;
-	register_early_suspend(&pDrv2605Ldata->early_suspend);
-#endif
-
-    hrtimer_init(&pDrv2605Ldata->timer, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
-    pDrv2605Ldata->timer.function = vibrator_timer_func;
-    INIT_WORK(&pDrv2605Ldata->vibrator_work, vibrator_work_routine);
-    INIT_WORK(&pDrv2605Ldata->vibrator_pattern_work, vibrator_pattern_work_routine);
-    wake_lock_init(&pDrv2605Ldata->wklock, WAKE_LOCK_SUSPEND, "vibrator");
-    mutex_init(&pDrv2605Ldata->lock);
-
-    return 0;
-
-fail4:
-	switch_dev_unregister(&pDrv2605Ldata->sw_dev);
-fail3:
-	device_destroy(pDrv2605Ldata->class, pDrv2605Ldata->version);
-fail2:
-    class_destroy(pDrv2605Ldata->class);	
-fail1:
-    unregister_chrdev_region(pDrv2605Ldata->version, 1);	
-fail0:
-    return reval;
-}
-
-static void dev_init_platform_data(struct drv2605L_data *pDrv2605Ldata)
-{
-	struct drv2605_platform_data *pDrv2605Platdata = &pDrv2605Ldata->PlatData;
-	struct actuator_data actuator = pDrv2605Platdata->actuator;
-	struct audio2haptics_data a2h = pDrv2605Platdata->a2h;
-	unsigned char temp = 0;
-
-	drv2605L_select_library(pDrv2605Ldata, actuator.g_effect_bank);
-	
-	//OTP memory saves data from 0x16 to 0x1a
-	if(pDrv2605Ldata->OTP == 0) {
-		if(actuator.rated_vol != 0){
-			drv2605L_reg_write(pDrv2605Ldata, RATED_VOLTAGE_REG, actuator.rated_vol);
-		}else{
-			printk(KERN_ERR"%s, ERROR Rated ZERO\n", __FUNCTION__);
-		}
-
-		if(actuator.over_drive_vol != 0){
-			drv2605L_reg_write(pDrv2605Ldata, OVERDRIVE_CLAMP_VOLTAGE_REG, actuator.over_drive_vol);
-		}else{
-			printk(KERN_ERR"%s, ERROR OverDriveVol ZERO\n", __FUNCTION__);
-		}
-		
-		drv2605L_set_bits(pDrv2605Ldata, 
-						FEEDBACK_CONTROL_REG, 
-						FEEDBACK_CONTROL_DEVICE_TYPE_MASK
-							|FEEDBACK_CONTROL_FB_BRAKE_MASK 
-							|FEEDBACK_CONTROL_LOOP_GAIN_MASK,
-						(((actuator.device_type == LRA)?FEEDBACK_CONTROL_MODE_LRA:FEEDBACK_CONTROL_MODE_ERM)
-							|FB_BRAKE_FACTOR
-							|LOOP_GAIN)
-						);
-	}else{
-		printk(KERN_ERR"%s, OTP programmed\n", __FUNCTION__);
-	}
-	
-	if(actuator.device_type == LRA){
-		unsigned char DriveTime = 5*(1000 - actuator.LRAFreq)/actuator.LRAFreq;
-		drv2605L_set_bits(pDrv2605Ldata, 
-				Control1_REG, 
-				Control1_REG_DRIVE_TIME_MASK, 
-				DriveTime);	
-		printk(KERN_ERR"%s, LRA = %d, DriveTime=0x%x\n", __FUNCTION__, actuator.LRAFreq, DriveTime);
-	}
-	
-	if(pDrv2605Platdata->loop == OPEN_LOOP){
-		temp = BIDIR_INPUT_BIDIRECTIONAL;
-	}else{
-		if(pDrv2605Platdata->BIDIRInput == UniDirectional){
-			temp = BIDIR_INPUT_UNIDIRECTIONAL;
-		}else{
-			temp = BIDIR_INPUT_BIDIRECTIONAL;
-		}
-	}
-
-	drv2605L_set_bits(pDrv2605Ldata, 
-				Control2_REG, 
-				Control2_REG_BIDIR_INPUT_MASK|BLANKING_TIME_MASK|IDISS_TIME_MASK, 
-				temp|BLANKING_TIME|IDISS_TIME);	
-				
-	if((pDrv2605Platdata->loop == CLOSE_LOOP)&&(actuator.device_type == LRA))
-	{
-		drv2605L_set_bits(pDrv2605Ldata, 
-				Control2_REG, 
-				AUTO_RES_SAMPLE_TIME_MASK, 
-				AUTO_RES_SAMPLE_TIME_300us);
-	}
-		
-	if((pDrv2605Platdata->loop == OPEN_LOOP)&&(actuator.device_type == LRA))
-	{
-		temp = LRA_OpenLoop_Enabled;
-	}
-	else if((pDrv2605Platdata->loop == OPEN_LOOP)&&(actuator.device_type == ERM))
-	{
-		temp = ERM_OpenLoop_Enabled;
-	}
-	else
-	{
-		temp = ERM_OpenLoop_Disable|LRA_OpenLoop_Disable;
-	}
-
-	if((pDrv2605Platdata->loop == CLOSE_LOOP) &&(pDrv2605Platdata->BIDIRInput == UniDirectional))
-	{
-		temp |= RTP_FORMAT_UNSIGNED;
-		drv2605L_reg_write(pDrv2605Ldata, REAL_TIME_PLAYBACK_REG, 0xff);
-	}
-	else
-	{
-		if(pDrv2605Platdata->RTPFormat == Signed)
-		{
-			temp |= RTP_FORMAT_SIGNED;
-			drv2605L_reg_write(pDrv2605Ldata, REAL_TIME_PLAYBACK_REG, 0x7f);
-		}
-		else
-		{
-			temp |= RTP_FORMAT_UNSIGNED;
-			drv2605L_reg_write(pDrv2605Ldata, REAL_TIME_PLAYBACK_REG, 0xff);
-		}
-	}
-	drv2605L_set_bits(pDrv2605Ldata, 
-					Control3_REG, 
-					Control3_REG_LOOP_MASK|Control3_REG_FORMAT_MASK, 
-					temp);	
-
-	drv2605L_set_bits(pDrv2605Ldata, 
-			Control4_REG, 
-			Control4_REG_CAL_TIME_MASK|Control4_REG_ZC_DET_MASK,
-			AUTO_CAL_TIME|ZC_DET_TIME
-			);
-										
-	drv2605L_set_bits(pDrv2605Ldata, 
-			Control5_REG, 
-			BLANK_IDISS_MSB_MASK,
-			BLANK_IDISS_MSB_CLEAR
-			);
-			
-	if(actuator.device_type == LRA)
-	{
-		/* please refer to the equations in DRV2604L data sheet */
-		unsigned int temp = 9846 * actuator.LRAFreq;
-		unsigned char R20 = (unsigned char)(100000000 / temp); 
-		drv2605L_reg_write(pDrv2605Ldata, LRA_OPENLOOP_PERIOD_REG, R20);
-	}
-	//for audio to haptics
-	if(pDrv2605Platdata->GpioTrigger == 0)	//not used as external trigger
-	{
-		drv2605L_reg_write(pDrv2605Ldata, AUDIO_HAPTICS_MIN_INPUT_REG, a2h.a2h_min_input);
-		drv2605L_reg_write(pDrv2605Ldata, AUDIO_HAPTICS_MAX_INPUT_REG, a2h.a2h_max_input);
-		drv2605L_reg_write(pDrv2605Ldata, AUDIO_HAPTICS_MIN_OUTPUT_REG, a2h.a2h_min_output);
-		drv2605L_reg_write(pDrv2605Ldata, AUDIO_HAPTICS_MAX_OUTPUT_REG, a2h.a2h_max_output);
-	}
-}
-
-#ifdef CONFIG_OF
-static int drv2605L_parse_dt(struct device *dev,
-			    struct drv2605_platform_data *pDrv2605Platdata)
-{
-	struct device_node *np = dev->of_node;
-	unsigned int use_enable, use_trigger;
-	int error;
-	int pattern_enable=0;
-
-
-	use_enable = of_property_read_bool(np, "ti,use-enable");
-
-	if(use_enable)
-		pDrv2605Platdata->GpioEnable = of_get_named_gpio_flags(np, "ti,enable-gpio", 0, NULL);
-  else
-  	pDrv2605Platdata->GpioEnable = 0;
-
-	dev_err(dev, "%s: dts: ti,enable-gpio=%d \n", __func__, pDrv2605Platdata->GpioEnable);
-
-  use_trigger = of_property_read_bool(np, "ti,use-interrupt");
-
-	if(use_trigger)
-		pDrv2605Platdata->GpioTrigger = of_get_named_gpio_flags(np, "ti,trigger-gpio", 0, NULL);
-	else
-		pDrv2605Platdata->GpioTrigger = 0 ;
-
-	dev_err(dev, "%s: dts: ti,trigger-gpio=%d \n", __func__, pDrv2605Platdata->GpioTrigger);
-
-	error = of_property_read_u32(np, "loop-mode", &pDrv2605Platdata->loop);
-	if (error) {
-		dev_err(dev, "%s: No entry for loop-mode\n", __func__);
-		return error;
-	}
-
-	dev_err(dev, "%s: dts: loop-mode=%d \n", __func__, pDrv2605Platdata->loop);
-
-	error = of_property_read_u32(np, "rtp-format", &pDrv2605Platdata->RTPFormat);
-	if (error) {
-		dev_err(dev, "%s: No entry for rtp-format", __func__);
-		return error;
-	}
-
-	dev_err(dev, "%s: dts: rtp-format=%d \n", __func__, pDrv2605Platdata->BIDIRInput);
-
-	error = of_property_read_u32(np, "bidir-input", &pDrv2605Platdata->BIDIRInput);
-	if (error) {
-		dev_err(dev, "%s: No entry for bidir-input\n", __func__);
-		return error;
-	}
-
-	dev_err(dev, "%s: dts: bidir-input=%d \n", __func__, pDrv2605Platdata->BIDIRInput);
-
-	error = of_property_read_u32(np, "actuator-device-type", &pDrv2605Platdata->actuator.device_type);
-	if (error) {
-		dev_err(dev, "%s: No entry for actuator-device-type\n", __func__);
-		return error;
-	}
-
-	dev_err(dev, "%s: dts: actuator-device-type=%d \n", __func__, pDrv2605Platdata->actuator.device_type);
-
-	error = of_property_read_u8(np, "actuator-rated-voltage", &pDrv2605Platdata->actuator.rated_vol);
-	if (error) {
-		dev_err(dev, "%s: No entry for actuator-rated-voltage\n", __func__);
-		return error;
-	}
-
-	dev_err(dev, "%s: dts: actuator-rated-voltage=%d \n", __func__, pDrv2605Platdata->actuator.rated_vol);
-
-	error = of_property_read_u8(np, "actuator-library-sel", &pDrv2605Platdata->actuator.g_effect_bank);
-	if (error) {
-		dev_err(dev, "%s: No entry for actuator-library-sel\n", __func__);
-		return error;
-	}
-
-	dev_err(dev, "%s: dts: actuator-library-sel=%d \n", __func__, pDrv2605Platdata->actuator.g_effect_bank);
-
-	error = of_property_read_u8(np, "actuator-overdrive-voltage", &pDrv2605Platdata->actuator.over_drive_vol);
-	if (error) {
-		dev_err(dev, "%s: No entry for actuator-overdrive-voltage\n", __func__);
-		return error;
-	}
-
-	dev_err(dev, "%s: dts: actuator-overdrive-voltage=%d \n", __func__, pDrv2605Platdata->actuator.over_drive_vol);
-
-	error = of_property_read_u8(np, "actuator-lra-freq", &pDrv2605Platdata->actuator.LRAFreq);
-	if (error) {
-		dev_err(dev, "%s: No entry for actuator-lra-freq\n", __func__);
-		return error;
-	}
-
-	dev_err(dev, "%s: dts: actuator-lra-freq=%d \n", __func__, pDrv2605Platdata->actuator.LRAFreq);
-
-	error = of_property_read_u8(np, "a2h-min-input-vol", &pDrv2605Platdata->a2h.a2h_min_input);
-	if (error) {
-		dev_err(dev, "%s: No entry for a2h-min-input-vol\n", __func__);
-		return error;
-	}
-
-	dev_err(dev, "%s: dts: a2h-min-input-vol=%d \n", __func__, pDrv2605Platdata->a2h.a2h_min_input);
-
-	error = of_property_read_u8(np, "a2h-max-input-vol", &pDrv2605Platdata->a2h.a2h_max_input);
-	if (error) {
-		dev_err(dev, "%s: No entry for a2h-max-input-vol\n", __func__);
-		return error;
-	}
-
-	dev_err(dev, "%s: dts: a2h-max-input-vol=%d \n", __func__, pDrv2605Platdata->a2h.a2h_max_input);
-
-	error = of_property_read_u8(np, "a2h-min-output-vol", &pDrv2605Platdata->a2h.a2h_min_output);
-	if (error) {
-		dev_err(dev, "%s: No entry for a2h-min-output-vol\n", __func__);
-		return error;
-	}
-
-	dev_err(dev, "%s: dts: a2h-min-output-vol=%d \n", __func__, pDrv2605Platdata->a2h.a2h_min_output);
-
-	error = of_property_read_u8(np, "a2h-max-output-vol", &pDrv2605Platdata->a2h.a2h_max_output);
-	if (error) {
-		dev_err(dev, "%s: No entry for a2h-max-output-vol\n", __func__);
-		return error;
-	}
-
-	dev_err(dev, "%s: dts: a2h-max-output-vol=%d \n", __func__, pDrv2605Platdata->a2h.a2h_max_output);
-	
-	pattern_enable = of_property_read_bool(np, "fih,enable-pattern");
-
-	if(pattern_enable)
-		pDrv2605Platdata->support_pattern = true;
-	else
-		pDrv2605Platdata->support_pattern = false;
-	
-	printk("support pattern is %d\n",pDrv2605Platdata->support_pattern);
-
-	return error;
-}
-#endif
-#if 0
-static int dev_auto_calibrate(struct drv2605L_data *pDrv2605Ldata)
-{
-	int err = 0, status=0;
-	
-	drv2605L_change_mode(pDrv2605Ldata, WORK_CALIBRATION, DEV_READY);
-	drv2605L_set_go_bit(pDrv2605Ldata, GO);
-			
-	/* Wait until the procedure is done */
-	drv2605L_poll_go_bit(pDrv2605Ldata);
-	/* Read status */
-	status = drv2605L_reg_read(pDrv2605Ldata, STATUS_REG);
-
-	printk(KERN_ERR"%s, calibration status =0x%x\n", __FUNCTION__, status);
-
-	/* Read calibration results */
-	drv2605L_reg_read(pDrv2605Ldata, AUTO_CALI_RESULT_REG);
-	drv2605L_reg_read(pDrv2605Ldata, AUTO_CALI_BACK_EMF_RESULT_REG);
-	drv2605L_reg_read(pDrv2605Ldata, FEEDBACK_CONTROL_REG);
-	
-	return err;
-}
-#endif
-static struct regmap_config drv2605L_i2c_regmap = {
+static const struct regmap_config drv260x_regmap_config = {
 	.reg_bits = 8,
 	.val_bits = 8,
+
+	.max_register = DRV260X_MAX_REG,
+	.reg_defaults = drv260x_reg_defs,
+	.num_reg_defaults = ARRAY_SIZE(drv260x_reg_defs),
 	.cache_type = REGCACHE_NONE,
 };
 
-static int drv2605L_probe(struct i2c_client* client, const struct i2c_device_id* id)
+static int drv260x_probe(struct i2c_client *client,
+			 const struct i2c_device_id *id)
 {
-	struct drv2605L_data *pDrv2605Ldata;
-	struct drv2605_platform_data *pDrv2605Platdata = client->dev.platform_data;
-	
-	int err = 0;
-	int status = 0;
-	printk(KERN_ERR"%s \n", __FUNCTION__);
-	if (!i2c_check_functionality(client->adapter, I2C_FUNC_I2C))
-	{
-		printk(KERN_ERR"%s:I2C check failed\n", __FUNCTION__);
-		return -ENODEV;
+	struct device *dev = &client->dev;
+	struct drv260x_data *haptics;
+	u32 voltage;
+	int error;
+
+	haptics = devm_kzalloc(dev, sizeof(*haptics), GFP_KERNEL);
+	if (!haptics)
+		return -ENOMEM;
+
+	error = device_property_read_u32(dev, "mode", &haptics->mode);
+	if (error) {
+		dev_err(dev, "Can't fetch 'mode' property: %d\n", error);
+		return error;
 	}
 
-	pDrv2605Ldata = devm_kzalloc(&client->dev, sizeof(struct drv2605L_data), GFP_KERNEL);
-	if (pDrv2605Ldata == NULL){
-		printk(KERN_ERR"%s:no memory\n", __FUNCTION__);
+	if (haptics->mode < DRV260X_LRA_MODE ||
+	    haptics->mode > DRV260X_ERM_MODE) {
+		dev_err(dev, "Vibrator mode is invalid: %i\n", haptics->mode);
+		return -EINVAL;
+	}
+
+	error = device_property_read_u32(dev, "library-sel", &haptics->library);
+	if (error) {
+		dev_err(dev, "Can't fetch 'library-sel' property: %d\n", error);
+		return error;
+	}
+
+	if (haptics->library < DRV260X_LIB_EMPTY ||
+	    haptics->library > DRV260X_ERM_LIB_F) {
+		dev_err(dev, "Library value is invalid: %i\n",
+			haptics->library);
+		return -EINVAL;
+	}
+
+	if (haptics->mode == DRV260X_LRA_MODE &&
+	    haptics->library != DRV260X_LIB_EMPTY &&
+	    haptics->library != DRV260X_LIB_LRA) {
+		dev_err(dev, "LRA Mode with ERM Library mismatch\n");
+		return -EINVAL;
+	}
+
+	if (haptics->mode == DRV260X_ERM_MODE &&
+	    (haptics->library == DRV260X_LIB_EMPTY ||
+	     haptics->library == DRV260X_LIB_LRA)) {
+		dev_err(dev, "ERM Mode with LRA Library mismatch\n");
+		return -EINVAL;
+	}
+
+	error = device_property_read_u32(dev, "vib-rated-mv", &voltage);
+	haptics->rated_voltage = error ? DRV260X_DEF_RATED_VOLT :
+					       drv260x_calculate_voltage(voltage);
+
+	error = device_property_read_u32(dev, "vib-overdrive-mv", &voltage);
+	haptics->overdrive_voltage = error ? DRV260X_DEF_OD_CLAMP_VOLT :
+						   drv260x_calculate_voltage(voltage);
+
+	haptics->regulator = devm_regulator_get(dev, "vbat");
+	if (IS_ERR(haptics->regulator)) {
+		error = PTR_ERR(haptics->regulator);
+		dev_err(dev, "unable to get regulator, error: %d\n", error);
+		return error;
+	}
+
+	haptics->enable_gpio =
+		devm_gpiod_get_optional(dev, "enable", GPIOD_OUT_HIGH);
+	if (IS_ERR(haptics->enable_gpio))
+		return PTR_ERR(haptics->enable_gpio);
+
+	haptics->input_dev = devm_input_allocate_device(dev);
+	if (!haptics->input_dev) {
+		dev_err(dev, "Failed to allocate input device\n");
 		return -ENOMEM;
 	}
-	
-#ifdef CONFIG_OF
-	if(!pDrv2605Platdata){
-		pDrv2605Platdata = devm_kzalloc(&client->dev, sizeof(struct drv2605_platform_data), GFP_KERNEL);
-		if (pDrv2605Platdata == NULL){
-			printk(KERN_ERR"%s:no memory\n", __FUNCTION__);
-			return -ENOMEM;
-		}
+
+	haptics->input_dev->name = "drv260x:haptics";
+	haptics->input_dev->close = drv260x_close;
+	input_set_drvdata(haptics->input_dev, haptics);
+
+	INIT_WORK(&haptics->work, drv260x_worker);
+
+	haptics->client = client;
+	i2c_set_clientdata(client, haptics);
+
+	haptics->regmap = devm_regmap_init_i2c(client, &drv260x_regmap_config);
+	if (IS_ERR(haptics->regmap)) {
+		error = PTR_ERR(haptics->regmap);
+		dev_err(dev, "Failed to allocate register map: %d\n", error);
+		return error;
 	}
 
-	drv2605L_parse_dt(&client->dev, pDrv2605Platdata);
-#endif
-
-	pDrv2605Ldata->regmap = devm_regmap_init_i2c(client, &drv2605L_i2c_regmap);
-	if (IS_ERR(pDrv2605Ldata->regmap)) {
-		err = PTR_ERR(pDrv2605Ldata->regmap);
-		printk(KERN_ERR"%s:Failed to allocate register map: %d\n",__FUNCTION__,err);
-		return err;
+	error = drv260x_init(haptics);
+	if (error) {
+		dev_err(dev, "Device init failed: %d\n", error);
+		return error;
 	}
 
-	memcpy(&pDrv2605Ldata->PlatData, pDrv2605Platdata, sizeof(struct drv2605_platform_data));
-	i2c_set_clientdata(client,pDrv2605Ldata);
-
-	if(pDrv2605Ldata->PlatData.GpioTrigger){
-		err = gpio_request(pDrv2605Ldata->PlatData.GpioTrigger,HAPTICS_DEVICE_NAME"Trigger");
-		if(err < 0){
-			printk(KERN_ERR"%s: GPIO request Trigger error\n", __FUNCTION__);				
-			goto exit_gpio_request_failed;
-		}
+	error = input_register_device(haptics->input_dev);
+	if (error) {
+		dev_err(dev, "couldn't register input device: %d\n", error);
+		return error;
 	}
 
-	if(pDrv2605Ldata->PlatData.GpioEnable){
-		err = gpio_request(pDrv2605Ldata->PlatData.GpioEnable,HAPTICS_DEVICE_NAME"Enable");
-		if(err < 0){
-			printk(KERN_ERR"%s: GPIO request enable error\n", __FUNCTION__);					
-			goto exit_gpio_request_failed;
-		}
-
-	    /* Enable power to the chip */
-	    gpio_direction_output(pDrv2605Ldata->PlatData.GpioEnable, 1);
-
-	    /* Wait 30 us */
-	    udelay(30);
+	error = alloc_chrdev_region(&char_driver_data.devt, 0, 1,
+				    DRV2605L_DRV_NAME);
+	if (error) {
+		dev_err(dev, "Failed to allocate character device driver: %d\n",
+			error);
+		return error;
 	}
 
-	err = drv2605L_reg_read(pDrv2605Ldata, STATUS_REG);
-	if(err < 0){
-		printk(KERN_ERR"%s, i2c bus fail (%d)\n", __FUNCTION__, err);
-		goto exit_gpio_request_failed;
-	}else{
-		printk(KERN_ERR"%s, i2c status (0x%x)\n", __FUNCTION__, err);
-		status = err;
-	}
-	/* Read device ID */
-	pDrv2605Ldata->device_id = (status & DEV_ID_MASK);
-	switch (pDrv2605Ldata->device_id)
-	{
-		case DRV2605_VER_1DOT1:
-		printk(KERN_ERR"drv2605 driver found: drv2605 v1.1.\n");
-		break;
-		case DRV2605_VER_1DOT0:
-		printk(KERN_ERR"drv2605 driver found: drv2605 v1.0.\n");
-		break;
-		case DRV2604:
-		printk(KERN_ALERT"drv2605 driver found: drv2604.\n");
-		break;
-		case DRV2604L:
-		printk(KERN_ALERT"drv2604 driver found: drv2604L.\n");
-		break;
-		case DRV2605L:
-		printk(KERN_ALERT"drv2604 driver found: drv2605L.\n");
-		break;		
-		default:
-		printk(KERN_ERR"drv2605 driver found: unknown.\n");
-		break;
-	}
+	class_register(&drv2605l_class);
 
-	if(pDrv2605Ldata->device_id != DRV2605L)
-	{
-		printk(KERN_ERR"%s, status(0x%x),device_id(%d) fail\n",
-			__FUNCTION__, status, pDrv2605Ldata->device_id);
-		goto exit_gpio_request_failed;
-	}
-
-	drv2605L_change_mode(pDrv2605Ldata, WORK_IDLE, DEV_READY);
-	schedule_timeout_interruptible(msecs_to_jiffies(STANDBY_WAKE_DELAY));
-	
-	pDrv2605Ldata->OTP = drv2605L_reg_read(pDrv2605Ldata, Control4_REG) & Control4_REG_OTP_MASK;
-	
-	dev_init_platform_data(pDrv2605Ldata);
-	
-    /*
-	if(pDrv2605Ldata->OTP == 0){
-		err = dev_auto_calibrate(pDrv2605Ldata);
-		if(err < 0){
-			printk(KERN_ERR"%s, ERROR, calibration fail\n",	__FUNCTION__);
-		}
-	}
-*/
-    /* Put hardware in standby */
-    drv2605L_change_mode(pDrv2605Ldata, WORK_IDLE, DEV_STANDBY);
-
-    Haptics_init(pDrv2605Ldata);
-	
-	pDRV2605Ldata = pDrv2605Ldata;
-    printk(KERN_ERR"drv2605 probe succeeded\n");
-
-    return 0;
-
-exit_gpio_request_failed:
-	if(pDrv2605Ldata->PlatData.GpioTrigger){
-		gpio_free(pDrv2605Ldata->PlatData.GpioTrigger);
-	}
-
-	if(pDrv2605Ldata->PlatData.GpioEnable){
-		gpio_free(pDrv2605Ldata->PlatData.GpioEnable);
-	}
-	
-    printk(KERN_ERR"%s failed, err=%d\n",__FUNCTION__, err);
-	return err;
+	return 0;
 }
 
-static int drv2605L_remove(struct i2c_client* client)
+// add remove op here?
+static int drv260x_remove(struct i2c_client *client)
 {
-	struct drv2605L_data *pDrv2605Ldata = i2c_get_clientdata(client);
+	class_unregister(&drv2605l_class);
+	unregister_chrdev_region(char_driver_data.devt, 1);
 
-    device_destroy(pDrv2605Ldata->class, pDrv2605Ldata->version);
-    class_destroy(pDrv2605Ldata->class);
-    unregister_chrdev_region(pDrv2605Ldata->version, 1);
-
-	if(pDrv2605Ldata->PlatData.GpioTrigger)
-		gpio_free(pDrv2605Ldata->PlatData.GpioTrigger);
-
-	if(pDrv2605Ldata->PlatData.GpioEnable)
-		gpio_free(pDrv2605Ldata->PlatData.GpioEnable);
-
-#ifdef CONFIG_HAS_EARLYSUSPEND		
-	unregister_early_suspend(&pDrv2605Ldata->early_suspend);
-#endif
-	
-    printk(KERN_ALERT"drv2605 remove");
-	
-    return 0;
+	return 0;
 }
 
-static struct i2c_device_id drv2605L_id_table[] =
+// probably won't be going into suspend mode, most likely won't need this section
+static int __maybe_unused drv260x_suspend(struct device *dev)
 {
-    { HAPTICS_DEVICE_NAME, 0 },
-    {}
-};
-MODULE_DEVICE_TABLE(i2c, drv2605L_id_table);
+	struct drv260x_data *haptics = dev_get_drvdata(dev);
+	int ret = 0;
 
-#ifdef CONFIG_OF
+	mutex_lock(&haptics->input_dev->mutex);
+
+	if (haptics->input_dev->users) {
+		ret = regmap_update_bits(haptics->regmap, DRV260X_MODE,
+					 DRV260X_STANDBY_MASK, DRV260X_STANDBY);
+		if (ret) {
+			dev_err(dev, "Failed to set standby mode\n");
+			goto out;
+		}
+
+		gpiod_set_value(haptics->enable_gpio, 0);
+
+		ret = regulator_disable(haptics->regulator);
+		if (ret) {
+			dev_err(dev, "Failed to disable regulator\n");
+			regmap_update_bits(haptics->regmap, DRV260X_MODE,
+					   DRV260X_STANDBY_MASK, 0);
+		}
+	}
+out:
+	mutex_unlock(&haptics->input_dev->mutex);
+	return ret;
+}
+
+static int __maybe_unused drv260x_resume(struct device *dev)
+{
+	struct drv260x_data *haptics = dev_get_drvdata(dev);
+	int ret = 0;
+
+	mutex_lock(&haptics->input_dev->mutex);
+
+	if (haptics->input_dev->users) {
+		ret = regulator_enable(haptics->regulator);
+		if (ret) {
+			dev_err(dev, "Failed to enable regulator\n");
+			goto out;
+		}
+
+		ret = regmap_update_bits(haptics->regmap, DRV260X_MODE,
+					 DRV260X_STANDBY_MASK, 0);
+		if (ret) {
+			dev_err(dev, "Failed to unset standby mode\n");
+			regulator_disable(haptics->regulator);
+			goto out;
+		}
+
+		gpiod_set_value(haptics->enable_gpio, 1);
+	}
+
+out:
+	mutex_unlock(&haptics->input_dev->mutex);
+	return ret;
+}
+
+static SIMPLE_DEV_PM_OPS(drv260x_pm_ops, drv260x_suspend, drv260x_resume);
+
+static const struct i2c_device_id drv260x_id[] = { { "drv2605l", 0 }, {} };
+MODULE_DEVICE_TABLE(i2c, drv260x_id);
+
 static const struct of_device_id drv260x_of_match[] = {
-	{ .compatible = "ti,drv2605l", },
-	{ }
+	{
+		.compatible = "ti,drv2605l",
+	},
+	{}
 };
 MODULE_DEVICE_TABLE(of, drv260x_of_match);
-#endif
 
-static struct i2c_driver drv2605L_driver =
-{
+static struct i2c_driver drv260x_driver = {
+    .probe = drv260x_probe,
+	.remove = drv260x_remove,
     .driver = {
-        .name = HAPTICS_DEVICE_NAME,
-		    .owner = THIS_MODULE,
-		    .of_match_table = of_match_ptr(drv260x_of_match),
+        .name = "drv260x-haptics",
+        .of_match_table = drv260x_of_match,
+        .pm = &drv260x_pm_ops,
     },
-    .id_table = drv2605L_id_table,
-    .probe = drv2605L_probe,
-    .remove = drv2605L_remove,
+    .id_table = drv260x_id,
 };
+module_i2c_driver(drv260x_driver);
 
-static int __init drv2605L_init(void)
-{
-	return i2c_add_driver(&drv2605L_driver);
-}
-
-static void __exit drv2605L_exit(void)
-{
-	i2c_del_driver(&drv2605L_driver);
-}
-
-module_init(drv2605L_init);
-module_exit(drv2605L_exit);
-
-MODULE_AUTHOR("Texas Instruments Inc.");
-MODULE_DESCRIPTION("Driver for "HAPTICS_DEVICE_NAME);
+MODULE_DESCRIPTION("TI DRV2605L haptics driver");
+MODULE_LICENSE("GPL");
+MODULE_AUTHOR("Dan Murphy <dmurphy@ti.com>, Vincent Zhao <code@gyroknight.com>");

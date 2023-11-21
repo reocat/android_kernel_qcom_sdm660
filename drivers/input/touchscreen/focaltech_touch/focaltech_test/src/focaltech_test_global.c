@@ -1,5 +1,5 @@
 /************************************************************************
-* Copyright (C) 2012-2015, Focaltech Systems (R)ï¿½ï¿½All Rights Reserved.
+* Copyright (C) 2012-2015, Focaltech Systems (R)£¬All Rights Reserved.
 *
 * File Name: focaltech_test_global.c
 *
@@ -46,7 +46,7 @@ int m_iTestDataCount = 0;
 char *TestResult = NULL;
 int TestResultLen = 0;
 
-/*ï¿½Ú´ï¿½ï¿½ï¿½ï¿½ë·½Ê½*/
+/*ÄÚ´æÉêÇë·½Ê½*/
 #define FTS_MALLOC_TYPE         1//0: kmalloc, 1: vmalloc
 enum enum_malloc_mode
 {

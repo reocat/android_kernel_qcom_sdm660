@@ -27,13 +27,13 @@
 ** =============================================================================
 */
 
-#include <linux/switch.h>
+//#include <linux/switch.h>
 #include <linux/regmap.h>
 #include <linux/timer.h>
 #include <linux/workqueue.h>
-#include <../../../drivers/staging/android/timed_output.h>
+//#include <../../../drivers/staging/android/timed_output.h>
 #include <linux/hrtimer.h>
-#include <linux/wakelock.h>
+//#include <linux/wakelock.h>
 #include <linux/mutex.h>
 #include <linux/cdev.h>
 #ifdef CONFIG_HAS_EARLYSUSPEND
