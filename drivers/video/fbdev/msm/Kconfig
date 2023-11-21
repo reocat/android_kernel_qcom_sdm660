@@ -1,6 +1,9 @@
 # SPDX-License-Identifier: GPL-2.0-only
 source "drivers/video/fbdev/msm/msm_dba/Kconfig"
 
+# SW4-HL-Display-GlanceMode-00+_20170524
+source "drivers/video/fbdev/msm/fih/Kconfig"
+
 if FB_MSM
 
 config FB_MSM_MDSS_COMMON
@@ -160,6 +163,11 @@ config FB_MSM_MDSS_XLOG_DEBUG
 	driver during fatal errors and enable some display-driver logging
 	into an internal buffer (this avoids logging overhead).
 
+config PXLW_IRIS3
+	depends on FB_MSM_MDSS
+	bool "Enable pxlw iris3"
+	default y
+	
 config FB_MSM_MDSS_FRC_DEBUG
 	depends on DEBUG_FS && FB_MSM_MDSS
 	bool "Enable Video FRC debugging"
