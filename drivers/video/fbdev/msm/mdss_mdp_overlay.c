@@ -31,6 +31,12 @@
 #include "mdss_dsi_clk.h"
 #include "mdss_sync.h"
 
+#if defined(CONFIG_PXLW_IRIS3)
+#include "mdss_dsi_iris3_ioctl.h"
+#include "mdss_dsi_iris3_pq.h"
+#include "mdss_dsi_iris3.h"
+#endif
+
 #define VSYNC_PERIOD 16
 #define BORDERFILL_NDX	0x0BF000BF
 #define CHECK_BOUNDS(offset, size, max_size) \
