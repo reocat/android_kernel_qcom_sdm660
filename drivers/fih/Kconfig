@@ -152,5 +152,5 @@ endchoice
 config MODULE_SIG_FIH_KEY_PATH
 	string
 	depends on MODULE_SIG_FIH
-	default "${KBUILD_SRC}/certs/fih" if MODULE_SIG_KEY_IN_NORMAL
+	default "./certs/fih" if MODULE_SIG_KEY_IN_NORMAL
 	default "../../../mach/QCOM8937/kernel/linux/certs/fih" if MODULE_SIG_KEY_IN_FTM
