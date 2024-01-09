@@ -1,6 +1,7 @@
 #include <dt-bindings/spmi/spmi.h>
 #include <dt-bindings/iio/qcom,spmi-vadc.h>
 #include <dt-bindings/interrupt-controller/irq.h>
+#include <dt-bindings/thermal/thermal.h>
 
 &spmi_bus {
 	qcom,pm660@0 {
@@ -527,7 +528,7 @@
 		};
 	};
 };
-
+/*
 &thermal_zones {
 	pm660_temp_alarm: pm660-tz {
 		polling-delay-passive = <0>;
@@ -555,3 +556,4 @@
 		};
 	};
 };
+*/

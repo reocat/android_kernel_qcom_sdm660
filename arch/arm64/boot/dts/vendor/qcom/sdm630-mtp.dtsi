@@ -12,6 +12,7 @@
 
 #include "sdm660-pinctrl.dtsi"
 #include "sdm630-camera-sensor-mtp.dtsi"
+
 / {
 	mtp_batterydata: qcom,battery-data {
 		qcom,batt-id-range-pct = <15>;

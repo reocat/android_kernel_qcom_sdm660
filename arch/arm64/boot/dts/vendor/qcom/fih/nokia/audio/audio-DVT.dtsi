@@ -16,7 +16,7 @@
 
 /* Fixed Shutdown issue of enable mic bias */
 &pm660l_3 {
-	pmic_analog_codec: analog-codec@f000 {
+	pmic_analog_codec: anlg-cdc@f000 {
 		qcom,cdc-vdd-mic-bias-current = <30000>;
 		qcom,cdc-micbias-cfilt-mv = <2700000>;
 	};
