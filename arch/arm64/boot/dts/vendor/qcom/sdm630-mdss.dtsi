@@ -218,7 +218,7 @@
 			compatible = "qcom,smmu_mdp_unsec";
 			iommus = <&mmss_bimc_smmu 0>;
 			gdsc-mmagic-mdss-supply = <&gdsc_bimc_smmu>;
-			clocks = <&clock_rpmcc  MMSSNOC_AXI_CLK>,
+			clocks = <&clock_rpmcc  RPM_SMD_MMSSNOC_AXI_CLK>,
 				<&clock_mmss MMSS_MNOC_AHB_CLK>,
 				<&clock_mmss MMSS_BIMC_SMMU_AHB_CLK>,
 				<&clock_mmss MMSS_BIMC_SMMU_AXI_CLK>;
@@ -232,7 +232,7 @@
 			compatible = "qcom,smmu_mdp_sec";
 			iommus = <&mmss_bimc_smmu 1>;
 			gdsc-mmagic-mdss-supply = <&gdsc_bimc_smmu>;
-			clocks = <&clock_rpmcc  MMSSNOC_AXI_CLK>,
+			clocks = <&clock_rpmcc  RPM_SMD_MMSSNOC_AXI_CLK>,
 				<&clock_mmss MMSS_MNOC_AHB_CLK>,
 				<&clock_mmss MMSS_BIMC_SMMU_AHB_CLK>,
 				<&clock_mmss MMSS_BIMC_SMMU_AXI_CLK>;
@@ -430,7 +430,7 @@
 			 <&clock_mmss MMSS_MDSS_MDP_CLK>,
 			 <&clock_mmss MMSS_MDSS_HDMI_DP_AHB_CLK>,
 			 <&clock_mmss MMSS_MDSS_DP_AUX_CLK>,
-			 <&clock_rpmcc RPM_LN_BB_CLK1>,
+			 <&clock_rpmcc RPM_SMD_LN_BB_CLK1>,
 			 <&clock_gcc GCC_USB3_CLKREF_CLK>,
 			 <&clock_gcc GCC_USB_PHY_CFG_AHB2PHY_CLK>,
 			 <&clock_mmss MMSS_MDSS_DP_LINK_CLK>,

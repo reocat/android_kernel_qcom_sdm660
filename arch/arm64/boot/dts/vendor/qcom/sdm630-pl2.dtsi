@@ -1380,7 +1380,7 @@
 
 		clock-names = "aux_clk", "xo_a";
 		clocks = <&clock_gcc HMSS_GPLL0_CLK_SRC>,
-			<&clock_rpmcc RPM_XO_A_CLK_SRC>;
+			<&clock_rpmcc RPM_SMD_XO_A_CLK_SRC>;
 
 		#clock-cells = <1>;
 	};
@@ -1676,7 +1676,7 @@
 		qcom,proxy-reg-names = "vdd_cx";
 		qcom,vdd_cx-uV-uA = <RPM_SMD_REGULATOR_LEVEL_TURBO 100000>;
 
-		clocks = <&clock_rpmcc CXO_PIL_LPASS_CLK>;
+		clocks = <&clock_rpmcc CXO_SMD_PIL_LPASS_CLK>;
 		clock-names = "xo";
 		qcom,proxy-clock-names = "xo";
 
@@ -1709,7 +1709,7 @@
 		clocks = <&clock_mmss MMSS_VIDEO_CORE_CLK>,
 			<&clock_mmss MMSS_MNOC_AHB_CLK>,
 			<&clock_mmss MMSS_VIDEO_AHB_CLK>,
-			<&clock_rpmcc MMSSNOC_AXI_CLK>,
+			<&clock_rpmcc RPM_SMD_MMSSNOC_AXI_CLK>,
 			<&clock_mmss MMSS_VIDEO_AXI_CLK>;
 		clock-names = "core_clk", "mnoc_ahb_clk", "iface_clk",
 			"noc_axi_clk", "bus_clk";
