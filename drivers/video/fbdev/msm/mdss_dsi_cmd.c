@@ -114,10 +114,6 @@ static int mdss_dsi_generic_lwrite(struct dsi_buf *dp, struct dsi_cmd_desc *cm)
 	*hp |= DSI_HDR_VC(dchdr->vc);
 	*hp |= DSI_HDR_LONG_PKT;
 	*hp |= DSI_HDR_DTYPE(DTYPE_GEN_LWRITE);
-#if defined(CONFIG_PXLW_IRIS3)
-	if (dchdr->ack)
-		*hp |= DSI_HDR_BTA;
-#endif	
 	if (dchdr->last)
 		*hp |= DSI_HDR_LAST;
 
@@ -146,10 +142,6 @@ static int mdss_dsi_generic_swrite(struct dsi_buf *dp, struct dsi_cmd_desc *cm)
 	hp = dp->hdr;
 	*hp = 0;
 	*hp |= DSI_HDR_VC(dchdr->vc);
-#if defined(CONFIG_PXLW_IRIS3)
-	if (dchdr->ack)
-		*hp |= DSI_HDR_BTA;
-#endif
 	if (dchdr->last)
 		*hp |= DSI_HDR_LAST;
 
@@ -255,11 +247,6 @@ static int mdss_dsi_dcs_lwrite(struct dsi_buf *dp, struct dsi_cmd_desc *cm)
 	*hp |= DSI_HDR_VC(dchdr->vc);
 	*hp |= DSI_HDR_LONG_PKT;
 	*hp |= DSI_HDR_DTYPE(DTYPE_DCS_LWRITE);
-#if defined(CONFIG_PXLW_IRIS3)
-	if (dchdr->ack)
-		*hp |= DSI_HDR_BTA;
-#endif
-	
 	if (dchdr->last)
 		*hp |= DSI_HDR_LAST;
 
@@ -496,10 +483,6 @@ static int mdss_dsi_set_max_pktsize(struct dsi_buf *dp, struct dsi_cmd_desc *cm)
 	*hp = 0;
 	*hp |= DSI_HDR_VC(dchdr->vc);
 	*hp |= DSI_HDR_DTYPE(DTYPE_MAX_PKTSIZE);
-#if defined(CONFIG_PXLW_IRIS3)
-	if (dchdr->ack)		/* ask ACK trigger msg from peripeheral */
-		*hp |= DSI_HDR_BTA;
-#endif
 	if (dchdr->last)
 		*hp |= DSI_HDR_LAST;
 
@@ -550,11 +533,6 @@ static int mdss_dsi_null_pkt(struct dsi_buf *dp, struct dsi_cmd_desc *cm)
 	*hp |= DSI_HDR_LONG_PKT;
 	*hp |= DSI_HDR_VC(dchdr->vc);
 	*hp |= DSI_HDR_DTYPE(DTYPE_NULL_PKT);
-#if defined(CONFIG_PXLW_IRIS3)
-	if (dchdr->ack)
-		*hp |= DSI_HDR_BTA;
-#endif
-	
 	if (dchdr->last)
 		*hp |= DSI_HDR_LAST;
 
@@ -768,7 +746,7 @@ int mdss_dsi_cmdlist_put(struct mdss_dsi_ctrl_pdata *ctrl,
 {
 	struct dcs_cmd_req *req;
 	struct dcs_cmd_list *clist;
-	int ret = -EINVAL;	//SW4-JasonSH-Display-EnhanceErrorHandling-00*_20170518
+	int ret = 0;
 
 	mutex_lock(&ctrl->cmd_mutex);
 	mutex_lock(&ctrl->cmdlist_mutex);

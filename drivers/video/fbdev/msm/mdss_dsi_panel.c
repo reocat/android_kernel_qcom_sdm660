@@ -22,19 +22,6 @@
 #include "mdss_debug.h"
 #include "mdss_livedisplay.h"
 
-#if defined(CONFIG_PXLW_IRIS3)
-#include "mdss_dsi_iris3.h"
-#include "mdss_dsi_iris3_lightup.h"
-#include "mdss_dsi_iris3_lightup_ocp.h"
-#include "mdss_dsi_iris3_pq.h"
-#endif
-
-//SW4-HL-Display-GlanceMode-00+{_20170524
-#ifdef CONFIG_AOD_FEATURE
-#include "fih/fih_msm_mdss_aod.h"
-#endif
-//SW4-HL-Display-GlanceMode-00+}_20170524
-
 #define DT_CMD_HDR 6
 #define DEFAULT_MDP_TRANSFER_TIME 14000
 
@@ -193,7 +180,7 @@ static void mdss_dsi_panel_apply_settings(struct mdss_dsi_ctrl_pdata *ctrl,
 }
 
 
-static void mdss_dsi_panel_cmds_send(struct mdss_dsi_ctrl_pdata *ctrl,
+void mdss_dsi_panel_cmds_send(struct mdss_dsi_ctrl_pdata *ctrl,
 			struct dsi_panel_cmds *pcmds, u32 flags)
 {
 	struct dcs_cmd_req cmdreq;
@@ -3033,124 +3020,9 @@ static int mdss_panel_parse_dt(struct device_node *np,
 	if (rc)
 		pinfo->esc_clk_rate_hz = MDSS_DSI_MAX_ESC_CLK_RATE_HZ;
 	pr_debug("%s: esc clk %d\n", __func__, pinfo->esc_clk_rate_hz);
+
 	mdss_livedisplay_parse_dt(np, pinfo);
 
-	//SW4-HL-Display-ImplementCECTCABC-00+{_20160126
-	mdss_dsi_parse_dcs_cmds(np, &ctrl_pdata->ce_on_cmds,
-		"qcom,mdss-dsi-ce-on-command", "qcom,mdss-dsi-ce-on-command-state");
-	mdss_dsi_parse_dcs_cmds(np, &ctrl_pdata->ce_off_cmds,
-		"qcom,mdss-dsi-ce-off-command", "qcom,mdss-dsi-ce-off-command-state");
-
-	mdss_dsi_parse_dcs_cmds(np, &ctrl_pdata->ct_normal_cmds,
-		"qcom,mdss-dsi-ct-normal-command", "qcom,mdss-dsi-ct-normal-command-state");
-	mdss_dsi_parse_dcs_cmds(np, &ctrl_pdata->ct_warm_cmds,
-		"qcom,mdss-dsi-ct-warm-command", "qcom,mdss-dsi-ct-warm-command-state");
-	mdss_dsi_parse_dcs_cmds(np, &ctrl_pdata->ct_cold_cmds,
-		"qcom,mdss-dsi-ct-cold-command", "qcom,mdss-dsi-ct-cold-command-state");
-
-	mdss_dsi_parse_dcs_cmds(np, &ctrl_pdata->blf_10_cmds,
-		"qcom,mdss-dsi-blf-10-command", "qcom,mdss-dsi-blf-10-command-state");
-	mdss_dsi_parse_dcs_cmds(np, &ctrl_pdata->blf_30_cmds,
-		"qcom,mdss-dsi-blf-30-command", "qcom,mdss-dsi-blf-30-command-state");
-	mdss_dsi_parse_dcs_cmds(np, &ctrl_pdata->blf_50_cmds,
-		"qcom,mdss-dsi-blf-50-command", "qcom,mdss-dsi-blf-50-command-state");
-	mdss_dsi_parse_dcs_cmds(np, &ctrl_pdata->blf_75_cmds,
-		"qcom,mdss-dsi-blf-75-command", "qcom,mdss-dsi-blf-75-command-state");
-
-	mdss_dsi_parse_dcs_cmds(np, &ctrl_pdata->cabc_off_cmds,
-		"qcom,mdss-dsi-cabc-off-command", "qcom,mdss-dsi-cabc-off-command-state");
-	mdss_dsi_parse_dcs_cmds(np, &ctrl_pdata->cabc_ui_cmds,
-		"qcom,mdss-dsi-cabc-ui-command", "qcom,mdss-dsi-cabc-ui-command-state");
-	mdss_dsi_parse_dcs_cmds(np, &ctrl_pdata->cabc_still_cmds,
-		"qcom,mdss-dsi-cabc-still-command", "qcom,mdss-dsi-cabc-still-command-state");
-	mdss_dsi_parse_dcs_cmds(np, &ctrl_pdata->cabc_moving_cmds,
-		"qcom,mdss-dsi-cabc-moving-command", "qcom,mdss-dsi-cabc-moving-command-state");
-
-	// Start
-	mdss_dsi_parse_dcs_cmds(np, &ctrl_pdata->aie_off_cmds,
-		"qcom,mdss-dsi-aie-off-command", "qcom,mdss-dsi-aie-off-command-state");
-	mdss_dsi_parse_dcs_cmds(np, &ctrl_pdata->aie_low_cmds,
-		"qcom,mdss-dsi-aie-low-command", "qcom,mdss-dsi-aie-low-command-state");
-	mdss_dsi_parse_dcs_cmds(np, &ctrl_pdata->aie_mid_cmds,
-		"qcom,mdss-dsi-aie-mid-command", "qcom,mdss-dsi-aie-mid-command-state");
-	mdss_dsi_parse_dcs_cmds(np, &ctrl_pdata->aie_high_cmds,
-		"qcom,mdss-dsi-aie-high-command", "qcom,mdss-dsi-aie-high-command-state");
-	// End
-	//SW4-HL-Display-ImplementCECTCABC-00+}_20160126
-
-	//SW4-HL-Display-SendCECTCABCBeforeInit-00*{_20161213
-	mdss_dsi_parse_dcs_cmds(np, &ctrl_pdata->ce_on_cmds_beforeInit,
-		"qcom,mdss-dsi-ce-on-command-BeforeInit", "qcom,mdss-dsi-ce-on-command-state-BeforeInit");
-	mdss_dsi_parse_dcs_cmds(np, &ctrl_pdata->ce_off_cmds_beforeInit,
-		"qcom,mdss-dsi-ce-off-command-BeforeInit", "qcom,mdss-dsi-ce-off-command-state-BeforeInit");
-
-	mdss_dsi_parse_dcs_cmds(np, &ctrl_pdata->ct_normal_cmds_beforeInit,
-		"qcom,mdss-dsi-ct-normal-command-BeforeInit", "qcom,mdss-dsi-ct-normal-command-state-BeforeInit");
-	mdss_dsi_parse_dcs_cmds(np, &ctrl_pdata->ct_warm_cmds_beforeInit,
-		"qcom,mdss-dsi-ct-warm-command-BeforeInit", "qcom,mdss-dsi-ct-warm-command-state-BeforeInit");
-	mdss_dsi_parse_dcs_cmds(np, &ctrl_pdata->ct_cold_cmds_beforeInit,
-		"qcom,mdss-dsi-ct-cold-command-BeforeInit", "qcom,mdss-dsi-ct-cold-command-state-BeforeInit");
-
-	mdss_dsi_parse_dcs_cmds(np, &ctrl_pdata->blf_10_cmds_beforeInit,
-		"qcom,mdss-dsi-blf-10-command-BeforeInit", "qcom,mdss-dsi-blf-10-command-state-BeforeInit");
-	mdss_dsi_parse_dcs_cmds(np, &ctrl_pdata->blf_30_cmds_beforeInit,
-		"qcom,mdss-dsi-blf-30-command-BeforeInit", "qcom,mdss-dsi-blf-30-command-state-BeforeInit");
-	mdss_dsi_parse_dcs_cmds(np, &ctrl_pdata->blf_50_cmds_beforeInit,
-		"qcom,mdss-dsi-blf-50-command-BeforeInit", "qcom,mdss-dsi-blf-50-command-state-BeforeInit");
-	mdss_dsi_parse_dcs_cmds(np, &ctrl_pdata->blf_75_cmds_beforeInit,
-		"qcom,mdss-dsi-blf-75-command-BeforeInit", "qcom,mdss-dsi-blf-75-command-state-BeforeInit");
-
-	mdss_dsi_parse_dcs_cmds(np, &ctrl_pdata->cabc_off_cmds_beforeInit,
-		"qcom,mdss-dsi-cabc-off-command-BeforeInit", "qcom,mdss-dsi-cabc-off-command-state-BeforeInit");
-	mdss_dsi_parse_dcs_cmds(np, &ctrl_pdata->cabc_ui_cmds_beforeInit,
-		"qcom,mdss-dsi-cabc-ui-command-BeforeInit", "qcom,mdss-dsi-cabc-ui-command-state-BeforeInit");
-	mdss_dsi_parse_dcs_cmds(np, &ctrl_pdata->cabc_still_cmds_beforeInit,
-		"qcom,mdss-dsi-cabc-still-command-BeforeInit", "qcom,mdss-dsi-cabc-still-command-state-BeforeInit");
-	mdss_dsi_parse_dcs_cmds(np, &ctrl_pdata->cabc_moving_cmds_beforeInit,
-		"qcom,mdss-dsi-cabc-moving-command-BeforeInit", "qcom,mdss-dsi-cabc-moving-command-state-BeforeInit");
-	//SW4-HL-Display-SendCECTCABCBeforeInit-00*}_20161213
-
-	//SW4-HL-Display-ShowLCMAndBacklightStatus-00+_20160304
-	mdss_dsi_parse_dcs_cmds(np, &ctrl_pdata->switch_cmdpage_cmds,
-		"fih,mdss-dsi-switch-cmdpage-command", "fih,mdss-dsi-switch-cmdpage-command-state");
-
-	//SW4-HL-Display-DynamicReadWriteRegister-00+_20160729
-	mdss_dsi_parse_dcs_cmds(np, &ctrl_pdata->write_reg_cmds,
-		"fih,mdss-dsi-write-reg-command", "fih,mdss-dsi-write-reg-command-state");
-
-	//SW4-HL-Display-FixRedScreenWhileShutdownBacklighLed-00+{_20170614
-	mdss_dsi_parse_dcs_cmds(np, &ctrl_pdata->bist_mode_black_pattern_cmds,
-		"fih,bist-mode-black-pattern-command", "fih,bist-mode-black-pattern-command-state");
-	mdss_dsi_parse_dcs_cmds(np, &ctrl_pdata->bist_mode_off_cmds,
-		"fih,bist-mode-off-command", "fih,bist-mode-off-command-state");
-	//SW4-HL-Display-FixRedScreenWhileShutdownBacklighLed-00+}_20170614
-
-	//SW4-HL-Display-C1NO-3148-00+{_20180508
-	mdss_dsi_parse_dcs_cmds(np, &ctrl_pdata->mipi_term_resistor_04h_cmds,
-		"fih,mipi-termination-resistor-04h-command", "fih,mipi-termination-resistor-04h-command-state");	
-	mdss_dsi_parse_dcs_cmds(np, &ctrl_pdata->mipi_term_resistor_14h_cmds,
-		"fih,mipi-termination-resistor-14h-command", "fih,mipi-termination-resistor-14h-command-state");	
-	mdss_dsi_parse_dcs_cmds(np, &ctrl_pdata->mipi_term_resistor_24h_cmds,
-		"fih,mipi-termination-resistor-24h-command", "fih,mipi-termination-resistor-24h-command-state");	
-	mdss_dsi_parse_dcs_cmds(np, &ctrl_pdata->mipi_term_resistor_34h_cmds,
-		"fih,mipi-termination-resistor-34h-command", "fih,mipi-termination-resistor-34h-command-state");	
-	//SW4-HL-Display-C1NO-3148-00+}_20180508
-
-	//SW4-HL-Display-C1NO-3148-00+{_20180508
-	mdss_dsi_parse_dcs_cmds(np, &ctrl_pdata->mipi_term_resistor_04h_cmds,
-		"fih,mipi-termination-resistor-04h-command", "fih,mipi-termination-resistor-04h-command-state");	
-	mdss_dsi_parse_dcs_cmds(np, &ctrl_pdata->mipi_term_resistor_14h_cmds,
-		"fih,mipi-termination-resistor-14h-command", "fih,mipi-termination-resistor-14h-command-state");	
-	mdss_dsi_parse_dcs_cmds(np, &ctrl_pdata->mipi_term_resistor_24h_cmds,
-		"fih,mipi-termination-resistor-24h-command", "fih,mipi-termination-resistor-24h-command-state");	
-	mdss_dsi_parse_dcs_cmds(np, &ctrl_pdata->mipi_term_resistor_34h_cmds,
-		"fih,mipi-termination-resistor-34h-command", "fih,mipi-termination-resistor-34h-command-state");	
-	//SW4-HL-Display-C1NO-3148-00+}_20180508
-
-	rc = of_property_read_u32(np, "fih,default-cabc-mode", &tmp);
-	cabc_set = (!rc ? tmp : 0);
-
-	pr_debug("\n\n******************** [HL] %s ---, OK return 0 **********************\n\n", __func__);
 	return 0;
 
 error:

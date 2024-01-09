@@ -3,8 +3,6 @@ ccflags-y += -I$(src)
 
 obj-$(CONFIG_FB_MSM_MDSS_MHL3) += mhl3/
 obj-$(CONFIG_MSM_DBA) += msm_dba/
-# SW4-HL-Display-GlanceMode-00+_20170524
-obj-$(CONFIG_AOD_FEATURE) +=fih/
 
 ifeq ($(CONFIG_FB_MSM_MDSS_MDP3), y)
 ccflags-y += -DTARGET_HW_MDSS_MDP3
@@ -44,10 +42,6 @@ mdss-dsi-objs += mdss_dsi_phy.o
 mdss-dsi-objs += mdss_dsi_phy_v3.o
 mdss-dsi-objs += mdss_dsi_phy_12nm.o
 mdss-dsi-objs += mdss_dsi_clk.o
-ifeq ($(CONFIG_PXLW_IRIS3),y)
-mdss-dsi-objs += mdss_dsi_iris3_ioctl.o mdss_dsi_iris3_lightup_ocp.o mdss_dsi_iris3_lightup.o mdss_dsi_iris3_lut.o
-mdss-dsi-objs += mdss_dsi_iris3_pq.o mdss_dsi_iris3_lp.o
-endif
 obj-$(CONFIG_FB_MSM_MDSS) += mdss-dsi.o
 obj-$(CONFIG_FB_MSM_MDSS) += mdss_panel.o
 
