@@ -423,7 +423,7 @@
 		qca,bt-vdd-pa-supply = <&pm660_l6>;
 		qca,bt-vdd-ldo-supply = <&pm660_l19>;
 		qca,bt-chip-pwd-supply = <&pm660l_bob_pin1>;
-		clocks = <&clock_rpmcc RPM_RF_CLK1_PIN>;
+		clocks = <&clock_rpmcc RPM_SMD_RF_CLK1_PIN>;
 		clock-names = "rf_clk1";
 
 		qca,bt-vdd-core-voltage-level = <1800000 1900000>;
@@ -1079,7 +1079,7 @@
 		compatible = "qcom,gcc-debug-sdm660";
 		reg = <0x62000 0x4>;
 		reg-names = "dbg_offset";
-		clocks = <&clock_rpmcc  RPM_XO_CLK_SRC>;
+		clocks = <&clock_rpmcc  RPM_SMD_XO_CLK_SRC>;
 		clock-names = "xo_clk_src";
 		qcom,cc-count = <4>;
 		qcom,gcc = <&clock_gcc>;
@@ -1255,7 +1255,7 @@
 		qcom,ipa-hw-mode = <0>; /* IPA hw type = Normal */
 		qcom,wan-rx-ring-size = <192>; /* IPA WAN-rx-ring-size*/
 		qcom,lan-rx-ring-size = <192>; /* IPA LAN-rx-ring-size*/
-		clocks = <&clock_rpmcc RPM_IPA_CLK>,
+		clocks = <&clock_rpmcc RPM_SMD_IPA_CLK>,
 			<&clock_rpmcc AGGR2_NOC_SMMU_CLK>;
 		clock-names = "core_clk", "smmu_clk";
 		qcom,arm-smmu;
@@ -1686,7 +1686,7 @@
 		reg-names = "membase", "smmu_iova_base", "smmu_iova_ipa";
 		iommus = <&anoc2_smmu 0x1a00>,
 			 <&anoc2_smmu 0x1a01>;
-		clocks = <&clock_rpmcc RPM_RF_CLK1_PIN>;
+		clocks = <&clock_rpmcc RPM_SMD_RF_CLK1_PIN>;
 		clock-names = "cxo_ref_clk_pin";
 		interrupts = <0 413 0>,   /* CE0 */
 			     <0 414 0>,   /* CE1 */
@@ -1787,7 +1787,7 @@
 		reg-names = "qdsp6_base", "halt_q6", "halt_modem",
 			    "halt_nc", "rmb_base", "restart_reg";
 
-		clocks = <&clock_rpmcc RPM_XO_CLK_SRC>,
+		clocks = <&clock_rpmcc RPM_SMD_XO_CLK_SRC>,
 			 <&clock_gcc GCC_MSS_CFG_AHB_CLK>,
 			 <&clock_gcc GCC_BIMC_MSS_Q6_AXI_CLK>,
 			 <&clock_gcc GCC_BOOT_ROM_AHB_CLK>,
@@ -2163,10 +2163,10 @@
 };
 
 #include "sdm630-ion.dtsi"
-#include "msm-pm660.dtsi"
-#include "msm-pm660l.dtsi"
-#include "msm-pm660-rpm-regulator.dtsi"
-#include "msm-pm660l-rpm-regulator.dtsi"
+#include "pm660.dtsi"
+#include "pm660l.dtsi"
+#include "pm660-rpm-regulator.dtsi"
+#include "pm660l-rpm-regulator.dtsi"
 #include "sdm660-bus.dtsi"
 #include "sdm630-regulator.dtsi"
 #include "msm-gdsc-660.dtsi"

@@ -22,6 +22,7 @@
 #include "msm_camera_io_util.h"
 #include "cam_smmu_api.h"
 #include "msm_isp48.h"
+#include <trace/events/msm_cam.h>
 
 #ifndef UINT16_MAX
 #define UINT16_MAX             (65535U)
